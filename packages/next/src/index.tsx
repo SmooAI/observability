@@ -34,11 +34,7 @@ export function RootErrorBoundary({ error, resetError, fallback, children }: Roo
     }, [error]);
 
     if (children) {
-        return (
-            <ErrorBoundary fallback={fallback ?? null}>
-                {children}
-            </ErrorBoundary>
-        );
+        return <ErrorBoundary fallback={fallback ?? null}>{children}</ErrorBoundary>;
     }
     return <>{fallback ?? null}</>;
 }

@@ -1,9 +1,22 @@
+<a name="readme-top"></a>
+
+<br />
+<div align="center">
+  <a href="https://smoo.ai">
+    <img src="../../images/logo.png" alt="SmooAI Logo" />
+  </a>
+</div>
+
 # @smooai/observability-react
 
-React bindings for `@smooai/observability`.
+![NPM Version](https://img.shields.io/npm/v/%40smooai%2Fobservability-react?style=for-the-badge)
+![NPM Downloads](https://img.shields.io/npm/dw/%40smooai%2Fobservability-react?style=for-the-badge)
+![GitHub License](https://img.shields.io/github/license/SmooAI/observability?style=for-the-badge)
 
-```
-npm i @smooai/observability @smooai/observability-react
+React bindings for `@smooai/observability`. Drop in an `<ErrorBoundary>` and you're done — captured errors arrive in your Smoo dashboard with the component tree and React error info attached.
+
+```sh
+pnpm add @smooai/observability @smooai/observability-react
 ```
 
 ## API
@@ -13,10 +26,12 @@ npm i @smooai/observability @smooai/observability-react
 ```tsx
 import { ErrorBoundary } from '@smooai/observability-react';
 
-<ErrorBoundary fallback={<div>Something went wrong</div>}>{children}</ErrorBoundary>;
+<ErrorBoundary fallback={<div>Something went wrong</div>}>
+    <App />
+</ErrorBoundary>;
 ```
 
-With a render-fallback:
+Render-prop fallback for retry UI:
 
 ```tsx
 <ErrorBoundary
@@ -27,13 +42,11 @@ With a render-fallback:
         </div>
     )}
 >
-    {children}
-</ErrorBoundary>;
+    <App />
+</ErrorBoundary>
 ```
 
 ### `useErrorHandler()`
-
-For capturing errors raised inside async event handlers where a render-time boundary cannot help:
 
 ```tsx
 const handleError = useErrorHandler();

@@ -1,5 +1,5 @@
 import { getCurrentScope } from './scope';
-import type { ClientOptions, Level, ObservabilityEvent, Runtime } from './types';
+import type { ClientOptions, ExceptionInfo, Level, ObservabilityEvent, Runtime, StackFrame } from './types';
 
 const SDK_NAME = '@smooai/observability';
 const SDK_VERSION = '0.1.0';
@@ -90,27 +90,27 @@ class _Client {
     }
 }
 
-function toException(err: unknown): ObservabilityEvent['exception'] extends (infer X)[] | undefined ? X : never {
+function toException(err: unknown): ExceptionInfo {
     // Minimal conversion — full stack-frame parsing lives in runtime modules.
     if (err instanceof Error) {
         return {
             type: err.name,
             value: err.message,
             stacktrace: { frames: parseStackString(err.stack) },
-        } as never;
+        };
     }
     return {
         type: 'Unknown',
         value: typeof err === 'string' ? err : JSON.stringify(err),
         stacktrace: { frames: [] },
-    } as never;
+    };
 }
 
-function parseStackString(stack: string | undefined): Array<{ module: string; function?: string; lineno?: number; colno?: number; inApp?: boolean }> {
+function parseStackString(stack: string | undefined): StackFrame[] {
     if (!stack) return [];
     // Real parser lives in runtime entries (different stack formats per engine).
     // Here, return one synthetic frame so the event is well-formed.
-    return [{ module: 'unparsed', function: undefined, inApp: true }];
+    return [{ module: 'unparsed', inApp: true }];
 }
 
 export const Client = new _Client();

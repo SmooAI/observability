@@ -1,30 +1,83 @@
-name: Release
+name: Release (Changesets 🦋)
 
 on:
+    workflow_dispatch:
     push:
-        branches: [main]
+        branches:
+            - main
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency:
+    group: release
+    cancel-in-progress: false
+
+env:
+    CI: true
+    FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
-    release:
+    version:
+        timeout-minutes: 30
         runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+            id-token: write
+            actions: write
         steps:
-            - uses: actions/checkout@v4
+            - name: Checkout code repository
+              uses: actions/checkout@v4
               with:
-                  fetch-depth: 0
-            - uses: pnpm/action-setup@v4
-            - uses: actions/setup-node@v4
+                  token: ${{ secrets.GH_PAT }}
+
+            - name: Setup pnpm
+              uses: pnpm/action-setup@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
               with:
                   node-version: 22
-                  cache: pnpm
+                  cache: 'pnpm'
                   registry-url: 'https://registry.npmjs.org'
-            - run: pnpm install --frozen-lockfile
-            - run: pnpm build
-            - uses: changesets/action@v1
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            - name: Typecheck
+              run: pnpm typecheck
+
+            - name: Lint
+              run: pnpm lint
+
+            - name: Test
+              run: pnpm test
+
+            - name: Build
+              run: pnpm build
+
+            - name: Format check
+              run: pnpm format:check
+
+            - name: Version Update 🦋
+              id: changesets
+              uses: changesets/action@v1
               with:
-                  publish: pnpm release
-                  version: pnpm version
+                  commit: '🦋 New version release'
+                  title: '🦋 New version release'
+                  publish: pnpm ci:publish
+                  createGithubReleases: true
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+                  GITHUB_TOKEN: ${{ secrets.GH_PAT }}
+                  NPM_TOKEN: ${{ secrets.SMOOAI_NPM_TOKEN }}
+
+            - name: Auto-Merge Changeset PR
+              run: |
+                  PR_NUMBER=$(gh pr list --state open --head changeset-release/main --json number --jq '.[0].number')
+
+                  if [[ -n "$PR_NUMBER" && "$PR_NUMBER" != "null" ]]; then
+                    echo "Found Changeset PR #$PR_NUMBER, attempting to auto-merge..."
+                    gh pr merge "$PR_NUMBER" --auto --squash
+                  else
+                    echo "No open Changeset PR found, skipping merge."
+                  fi
+              env:
+                  GH_TOKEN: ${{ secrets.GH_PAT }}

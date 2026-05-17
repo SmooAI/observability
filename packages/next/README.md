@@ -1,17 +1,29 @@
+<a name="readme-top"></a>
+
+<br />
+<div align="center">
+  <a href="https://smoo.ai">
+    <img src="../../images/logo.png" alt="SmooAI Logo" />
+  </a>
+</div>
+
 # @smooai/observability-next
 
-Next.js wrapper for `@smooai/observability`. Provides:
+![NPM Version](https://img.shields.io/npm/v/%40smooai%2Fobservability-next?style=for-the-badge)
+![NPM Downloads](https://img.shields.io/npm/dw/%40smooai%2Fobservability-next?style=for-the-badge)
+![GitHub License](https://img.shields.io/github/license/SmooAI/observability?style=for-the-badge)
 
-- `<RootErrorBoundary>` for `app/global-error.tsx` and `app/error.tsx`
-- `withSmooObservability(nextConfig, options)` for `next.config.ts` (build-time sourcemap upload, productionBrowserSourceMaps)
+Next.js wrapper for `@smooai/observability`. One config wrap, one boundary, automatic source maps, full release tagging.
 
+```sh
+pnpm add @smooai/observability @smooai/observability-react @smooai/observability-next
 ```
-npm i @smooai/observability @smooai/observability-react @smooai/observability-next
-```
 
-## Usage
+## API
 
-### `next.config.ts`
+### `withSmooObservability(nextConfig, options)`
+
+Wrap your `next.config.ts`. Enables `productionBrowserSourceMaps` and (in CI) uploads them to the Smoo Observability sourcemap bucket so stacks are symbolicated automatically.
 
 ```ts
 import { withSmooObservability } from '@smooai/observability-next/build';
@@ -28,7 +40,7 @@ export default withSmooObservability(
 );
 ```
 
-### `app/global-error.tsx`
+### `<RootErrorBoundary>`
 
 ```tsx
 'use client';

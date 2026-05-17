@@ -17,13 +17,13 @@ interface ErrorBoundaryState {
  * receives a `resetError` callback.
  */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-    state: ErrorBoundaryState = { error: null };
+    override state: ErrorBoundaryState = { error: null };
 
     static getDerivedStateFromError(error: Error): ErrorBoundaryState {
         return { error };
     }
 
-    componentDidCatch(error: Error, info: ErrorInfo): void {
+    override componentDidCatch(error: Error, info: ErrorInfo): void {
         Client.captureException(error, { tags: { source: 'react-error-boundary' } });
         this.props.onError?.(error, info);
     }
@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
         this.setState({ error: null });
     };
 
-    render(): ReactNode {
+    override render(): ReactNode {
         if (this.state.error) {
             const f = this.props.fallback;
             if (typeof f === 'function') {
