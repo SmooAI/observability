@@ -1,0 +1,37 @@
+{
+    "name": "@smooai/observability-monorepo",
+    "version": "0.0.0",
+    "private": true,
+    "description": "Smoo AI Observability SDK — Sentry-like error tracking for browser and Node with React + Next wrappers",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/SmooAI/observability.git"
+    },
+    "homepage": "https://smoo.ai/platform/observability",
+    "bugs": {
+        "url": "https://github.com/SmooAI/observability/issues"
+    },
+    "type": "module",
+    "scripts": {
+        "build": "turbo run build",
+        "test": "turbo run test",
+        "typecheck": "turbo run typecheck",
+        "lint": "turbo run lint",
+        "changeset": "changeset",
+        "version": "changeset version",
+        "release": "turbo run build && changeset publish"
+    },
+    "devDependencies": {
+        "@changesets/cli": "^2.27.10",
+        "@types/node": "^22",
+        "tsup": "^8.4.0",
+        "turbo": "^2.3.0",
+        "typescript": "^5.6.0",
+        "vitest": "^3.1.1"
+    },
+    "packageManager": "pnpm@10.6.1",
+    "engines": {
+        "node": ">=22"
+    }
+}

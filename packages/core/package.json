@@ -1,0 +1,55 @@
+{
+    "name": "@smooai/observability",
+    "version": "0.1.0",
+    "description": "Smoo AI Observability core SDK — browser + Node error capture with batched transport",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/SmooAI/observability.git",
+        "directory": "packages/core"
+    },
+    "homepage": "https://github.com/SmooAI/observability/tree/main/packages/core",
+    "bugs": {
+        "url": "https://github.com/SmooAI/observability/issues"
+    },
+    "type": "module",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "browser": "./dist/browser.js",
+            "node": "./dist/node.js",
+            "default": "./dist/index.js"
+        },
+        "./browser": {
+            "types": "./dist/browser.d.ts",
+            "import": "./dist/browser.js"
+        },
+        "./node": {
+            "types": "./dist/node.d.ts",
+            "import": "./dist/node.js"
+        }
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "CHANGELOG.md"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "test": "vitest run --passWithNoTests",
+        "typecheck": "tsc --noEmit",
+        "lint": "echo \"(lint stub — biome/eslint TBD)\""
+    },
+    "devDependencies": {
+        "@types/node": "^22",
+        "tsup": "^8.4.0",
+        "typescript": "^5.6.0",
+        "vitest": "^3.1.1"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
+}
