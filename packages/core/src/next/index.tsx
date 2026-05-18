@@ -1,7 +1,7 @@
 'use client';
 
-import { Client } from '@smooai/observability';
-import { ErrorBoundary } from '@smooai/observability-react';
+import { Client } from '../client';
+import { ErrorBoundary } from '../react';
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
 
@@ -40,4 +40,4 @@ export function RootErrorBoundary({ error, resetError, fallback, children }: Roo
 }
 
 // Re-export the React bindings under this package as a convenience.
-export { ErrorBoundary, useErrorHandler } from '@smooai/observability-react';
+export { ErrorBoundary, useErrorHandler } from '../react';
