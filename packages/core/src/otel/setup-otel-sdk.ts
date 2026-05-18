@@ -11,9 +11,11 @@
  */
 
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
+import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
 export interface SetupOtelOptions {
@@ -43,6 +45,12 @@ export interface SetupOtelOptions {
      * not-running instance. Default false.
      */
     skipStart?: boolean;
+    /**
+     * Metric export interval in milliseconds. Default 30_000 (30s). For
+     * Lambda containers consider lowering to 5_000–10_000 so metrics flush
+     * before the container freezes.
+     */
+    metricExportIntervalMs?: number;
 }
 
 export interface OtelSdkHandle {
@@ -64,11 +72,26 @@ let installed: OtelSdkHandle | null = null;
 export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
     if (installed) return installed;
 
-    const endpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    const traceEndpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    const metricEndpoint = process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-    const traceExporter = endpoint
-        ? new OTLPTraceExporter({ url: endpoint, headers: options.otlpHeaders })
+    const traceExporter = traceEndpoint
+        ? new OTLPTraceExporter({ url: traceEndpoint, headers: options.otlpHeaders })
         : new OTLPTraceExporter({ headers: options.otlpHeaders });
+
+    // Metrics MeterProvider — same OTLP/HTTP transport, separate exporter.
+    // PeriodicExportingMetricReader batches per-aggregation-period (default
+    // 60s; Lambda containers may live shorter so a 30s window catches more).
+    const metricExporter = metricEndpoint
+        ? new OTLPMetricExporter({ url: metricEndpoint, headers: options.otlpHeaders })
+        : new OTLPMetricExporter({ headers: options.otlpHeaders });
+    // sdk-node and sdk-metrics ship slightly different versions of the
+    // MetricReader class (private-property nominal-typing mismatch). Cast
+    // through `unknown` — runtime contract is identical.
+    const metricReader = new PeriodicExportingMetricReader({
+        exporter: metricExporter,
+        exportIntervalMillis: options.metricExportIntervalMs ?? 30_000,
+    });
 
     const resource = new Resource({
         [ATTR_SERVICE_NAME]: options.serviceName,
@@ -89,6 +112,8 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
     const sdk = new NodeSDK({
         resource,
         traceExporter,
+        // Cast: sdk-node bundles an older sdk-metrics; the runtime API matches.
+        metricReader: metricReader as unknown as never,
         instrumentations,
     });
 

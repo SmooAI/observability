@@ -1,6 +1,6 @@
 {
     "name": "@smooai/observability",
-    "version": "0.5.0",
+    "version": "0.6.0",
     "description": "Smoo AI Observability SDK — OTel-first error capture, traces, metrics, and React/Next.js integrations in a single package with subpath exports",
     "license": "MIT",
     "repository": {
@@ -35,6 +35,10 @@
             "types": "./dist/otel.d.mts",
             "import": "./dist/otel.mjs"
         },
+        "./metrics": {
+            "types": "./dist/metrics.d.mts",
+            "import": "./dist/metrics.mjs"
+        },
         "./react": {
             "types": "./dist/react.d.mts",
             "import": "./dist/react.mjs"
@@ -62,8 +66,10 @@
     "dependencies": {
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/auto-instrumentations-node": "^0.50.0",
+        "@opentelemetry/exporter-metrics-otlp-http": "^0.55.0",
         "@opentelemetry/exporter-trace-otlp-http": "^0.55.0",
         "@opentelemetry/resources": "^1.30.0",
+        "@opentelemetry/sdk-metrics": "^1.30.0",
         "@opentelemetry/sdk-node": "^0.55.0",
         "@opentelemetry/semantic-conventions": "^1.30.0"
     },
