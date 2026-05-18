@@ -43,7 +43,12 @@
         "typecheck": "tsc --noEmit",
         "lint": "echo \"(lint stub — biome/eslint TBD)\""
     },
+    "dependencies": {
+        "@opentelemetry/api": "^1.9.0"
+    },
     "devDependencies": {
+        "@opentelemetry/context-async-hooks": "^1.30.0",
+        "@opentelemetry/sdk-trace-base": "^1.30.0",
         "@types/node": "^22",
         "tsup": "^8.4.0",
         "typescript": "^5.6.0",
