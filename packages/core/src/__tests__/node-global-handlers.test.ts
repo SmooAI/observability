@@ -23,7 +23,8 @@ describe('registerNodeGlobalHandlers', () => {
     // process.emit is typed with strict overloads per signal name; cast through
     // a loose-typed alias so tests can fire the events we just registered.
     // Must keep `this` bound to process or EventEmitter lookups crash.
-    const emit = (event: string, ...args: unknown[]): boolean => (process.emit as unknown as (event: string, ...args: unknown[]) => boolean).call(process, event, ...args);
+    const emit = (event: string, ...args: unknown[]): boolean =>
+        (process.emit as unknown as (event: string, ...args: unknown[]) => boolean).call(process, event, ...args);
 
     it('captures uncaughtException via Client.captureException', () => {
         registerNodeGlobalHandlers();
