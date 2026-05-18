@@ -1,0 +1,57 @@
+{
+    "name": "@smooai/observability-otel",
+    "version": "0.1.0",
+    "description": "OpenTelemetry foundation for @smooai/observability — Node SDK setup, auto-instrumentations, OTLP export, and bridge to the core Client",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/SmooAI/observability.git",
+        "directory": "packages/otel"
+    },
+    "homepage": "https://github.com/SmooAI/observability/tree/main/packages/otel",
+    "bugs": {
+        "url": "https://github.com/SmooAI/observability/issues"
+    },
+    "type": "module",
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist",
+        "README.md",
+        "CHANGELOG.md"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "test": "vitest run --passWithNoTests",
+        "typecheck": "tsc --noEmit",
+        "lint": "echo \"(lint stub — biome/eslint TBD)\""
+    },
+    "dependencies": {
+        "@opentelemetry/api": "^1.9.0",
+        "@opentelemetry/auto-instrumentations-node": "^0.50.0",
+        "@opentelemetry/exporter-trace-otlp-http": "^0.55.0",
+        "@opentelemetry/resources": "^1.28.0",
+        "@opentelemetry/sdk-node": "^0.55.0",
+        "@opentelemetry/semantic-conventions": "^1.28.0",
+        "@smooai/observability": "workspace:*"
+    },
+    "devDependencies": {
+        "@opentelemetry/context-async-hooks": "^1.30.0",
+        "@opentelemetry/sdk-trace-base": "^1.30.0",
+        "@types/node": "^22",
+        "tsup": "^8.4.0",
+        "typescript": "^5.6.0",
+        "vitest": "^3.1.1"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
+    "packageManager": "pnpm@10.6.1+sha512.40ee09af407fa9fbb5fbfb8e1cb40fbb74c0af0c3e10e9224d7b53c7658528615b2c92450e74cfad91e3a2dcafe3ce4050d80bda71d757756d2ce2b66213e9a3"
+}
