@@ -6,23 +6,30 @@ const SDK_NAME = '@smooai/observability';
 const SDK_VERSION = '0.1.0';
 
 /**
- * Singleton client used by both browser and Node entry points. The transport
- * + capture-handler integrations are wired in by the runtime-specific entry
- * (`src/browser/index.ts`, `src/node/index.ts`).
- *
- * This file is intentionally minimal until the SDK implementation lands —
- * see SMOODEV-1067 follow-up pearls.
+ * Native per-runtime capture handler. When registered, `captureException` /
+ * `captureMessage` route the prepared event through it and SKIP the HTTP
+ * transport — used by the node runtime to emit directly to OpenTelemetry
+ * span events (no parallel Smoo-native batched fetch). Browser keeps the
+ * transport path because OTel browser SDK is too heavy for customer-facing
+ * sites.
+ */
+export type CaptureHandler = (event: ObservabilityEvent, raw: { error?: unknown; message?: string; extra?: { tags?: Record<string, string> } }) => void;
+
+/**
+ * Singleton client used by both browser and Node entry points. The
+ * transport (browser) or native capture handler (node) is wired in by the
+ * runtime-specific entry (`src/browser/index.ts`, `src/node/index.ts`).
  */
 class _Client {
     private options: ClientOptions | null = null;
     private runtime: Runtime = typeof window === 'undefined' ? 'node' : 'browser';
     private transport: ((batch: ObservabilityEvent[]) => Promise<void>) | null = null;
+    private captureHandler: CaptureHandler | null = null;
 
     init(options: ClientOptions): void {
         this.options = options;
-        // Capture-handler registration happens in the runtime entry point
-        // (browser/index.ts or node/index.ts), which calls `_registerTransport`
-        // and binds globals like window.onerror / process events.
+        // Wiring (transport for browser, OTel-native capture for node) happens
+        // in the runtime-specific entry's init wrapper.
     }
 
     _isInitialized(): boolean {
@@ -35,6 +42,16 @@ class _Client {
 
     _registerTransport(t: (batch: ObservabilityEvent[]) => Promise<void>): void {
         this.transport = t;
+    }
+
+    /**
+     * Register a runtime-native capture path. When set, captureException /
+     * captureMessage route through this handler INSTEAD of the HTTP transport
+     * — node uses this to write directly to OpenTelemetry span events so the
+     * Smoo SDK speaks OTel natively. Calling with `null` un-registers.
+     */
+    _registerCaptureHandler(handler: CaptureHandler | null): void {
+        this.captureHandler = handler;
     }
 
     setUser(user: ObservabilityEvent['user']): void {
@@ -62,7 +79,16 @@ class _Client {
             sdk: { name: SDK_NAME, version: SDK_VERSION, runtime: this.runtime },
         });
         const final = this.options.beforeSend ? this.options.beforeSend(event) : event;
-        if (final && this.transport) {
+        if (!final) return eventId;
+        if (this.captureHandler) {
+            try {
+                this.captureHandler(final, { error, extra });
+            } catch {
+                /* swallow — observability must not throw */
+            }
+            return eventId;
+        }
+        if (this.transport) {
             // Fire-and-forget; transport handles batching/retry.
             void this.transport([final]).catch(() => {
                 /* swallow — observability must not throw */
@@ -84,7 +110,16 @@ class _Client {
             sdk: { name: SDK_NAME, version: SDK_VERSION, runtime: this.runtime },
         });
         const final = this.options.beforeSend ? this.options.beforeSend(event) : event;
-        if (final && this.transport) {
+        if (!final) return eventId;
+        if (this.captureHandler) {
+            try {
+                this.captureHandler(final, { message });
+            } catch {
+                /* swallow */
+            }
+            return eventId;
+        }
+        if (this.transport) {
             void this.transport([final]).catch(() => {});
         }
         return eventId;
