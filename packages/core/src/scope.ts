@@ -56,10 +56,33 @@ export function getCurrentScope(): Scope {
 export function withScope<T>(fn: (scope: Scope) => T): T {
     const next = getCurrentScope().clone();
     stack.push(next);
-    try {
-        return fn(next);
-    } finally {
+    let popped = false;
+    const pop = (): void => {
+        if (popped) return;
+        popped = true;
         stack.pop();
+    };
+    try {
+        const result = fn(next);
+        // If `fn` returned a thenable, defer the pop until the chain settles
+        // so any `captureException` fired from inside an await still sees the
+        // request's scope. Sync callers are unaffected — the pop runs in the
+        // finally below as before.
+        if (result && typeof (result as { then?: unknown }).then === 'function') {
+            return (result as unknown as Promise<unknown>).then(
+                (v) => {
+                    pop();
+                    return v as T;
+                },
+                (err) => {
+                    pop();
+                    throw err;
+                },
+            ) as unknown as T;
+        }
+        return result;
+    } finally {
+        pop();
     }
 }
 
