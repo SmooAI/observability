@@ -1,6 +1,6 @@
 {
     "name": "@smooai/observability-next",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "description": "Next.js wrapper for @smooai/observability — RootErrorBoundary, withSmooObservability(), build-time sourcemap upload",
     "license": "MIT",
     "repository": {

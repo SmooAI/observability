@@ -1,5 +1,13 @@
 # @smooai/observability-next
 
+## 0.4.0
+
+### Patch Changes
+
+- Updated dependencies [365b90c]
+    - @smooai/observability@0.4.0
+    - @smooai/observability-react@0.4.0
+
 ## 0.3.0
 
 ### Patch Changes
