@@ -1,6 +1,6 @@
 {
     "name": "@smooai/observability",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Smoo AI Observability core SDK — browser + Node error capture with batched transport",
     "license": "MIT",
     "repository": {
