@@ -1,4 +1,4 @@
-import { Client } from '@smooai/observability';
+import { Client } from '../client';
 import { Component, type ErrorInfo, type ReactNode, useCallback } from 'react';
 
 interface ErrorBoundaryProps {
