@@ -104,12 +104,7 @@ export function bootstrapObservability(overrides: Partial<BootstrapEnv> = {}): B
         clientSecret: overrides.clientSecret ?? process.env.SMOOAI_OBSERVABILITY_CLIENT_SECRET,
         serviceName: overrides.serviceName ?? process.env.SMOOAI_OBSERVABILITY_SERVICE_NAME ?? 'smoo-service',
         environment: overrides.environment ?? process.env.SMOOAI_OBSERVABILITY_ENVIRONMENT ?? process.env.STAGE ?? process.env.NODE_ENV,
-        release:
-            overrides.release ??
-            process.env.SMOOAI_OBSERVABILITY_RELEASE ??
-            process.env.GIT_SHA ??
-            process.env.LAMBDA_FUNCTION_VERSION ??
-            'dev',
+        release: overrides.release ?? process.env.SMOOAI_OBSERVABILITY_RELEASE ?? process.env.GIT_SHA ?? process.env.LAMBDA_FUNCTION_VERSION ?? 'dev',
         disabled: overrides.disabled ?? truthy(process.env.SMOOAI_OBSERVABILITY_DISABLED),
     };
 
