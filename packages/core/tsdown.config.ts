@@ -7,6 +7,7 @@ export default defineConfig({
         node: 'src/node/index.ts',
         otel: 'src/otel/index.ts',
         metrics: 'src/metrics/index.ts',
+        bootstrap: 'src/bootstrap/index.ts',
         react: 'src/react/index.tsx',
         next: 'src/next/index.tsx',
         'next-build': 'src/next/build.ts',

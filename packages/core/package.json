@@ -39,6 +39,10 @@
             "types": "./dist/metrics.d.mts",
             "import": "./dist/metrics.mjs"
         },
+        "./bootstrap": {
+            "types": "./dist/bootstrap.d.mts",
+            "import": "./dist/bootstrap.mjs"
+        },
         "./react": {
             "types": "./dist/react.d.mts",
             "import": "./dist/react.mjs"
