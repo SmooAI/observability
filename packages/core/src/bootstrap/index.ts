@@ -90,8 +90,15 @@ let bootstrapped: BootstrapResult | null = null;
  * Run the bootstrap explicitly. Most callers should use the side-effect
  * import (`import '@smooai/observability/bootstrap'`) instead — but
  * tests and advanced callers can use this to override env defaults.
+ *
+ * Returns a Promise so the initial token mint can complete before the
+ * OTel SDK is constructed. The OTel HTTP exporter (v0.55+) snapshots
+ * its `headers` config at construction time via `Object.assign` — so
+ * the previous fire-and-forget approach left the exporter holding an
+ * empty header object permanently, and every export 401'd at the
+ * Bearer-auth gate. SMOODEV-1128.
  */
-export function bootstrapObservability(overrides: Partial<BootstrapEnv> = {}): BootstrapResult {
+export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = {}): Promise<BootstrapResult> {
     if (bootstrapped) return bootstrapped;
 
     const env: BootstrapEnv = {
@@ -113,10 +120,12 @@ export function bootstrapObservability(overrides: Partial<BootstrapEnv> = {}): B
         return bootstrapped;
     }
 
-    // The headers object is held by reference inside the OTLP exporter —
-    // mutating it updates every subsequent export without rebuilding the
-    // exporter. That's how we refresh JWTs in-place without disturbing
-    // the SDK pipeline.
+    // SMOODEV-1128: OTel's OTLP HTTP exporter (v0.55+) `mergeHeaders`
+    // does `Object.assign({}, fallback, userProvided)` — it COPIES keys
+    // into a fresh object at construction time, so mutating the
+    // sharedHeaders object after `setupOtelSdk` runs is invisible to
+    // the exporter. We must populate Authorization BEFORE constructing
+    // the SDK, hence the async mint below.
     const sharedHeaders: Record<string, string> = {};
 
     let stopRefresh = () => {};
@@ -124,7 +133,25 @@ export function bootstrapObservability(overrides: Partial<BootstrapEnv> = {}): B
         if (env.token) {
             sharedHeaders.authorization = `Bearer ${env.token}`;
         } else if (env.authUrl && env.clientId && env.clientSecret) {
-            stopRefresh = startTokenRefresh({
+            // Mint synchronously (await) so the Authorization header is
+            // present when setupOtelSdk constructs the exporter below.
+            // The background refresh schedules subsequent mints but, for
+            // the same Object.assign reason, those won't update the live
+            // exporter — we rely on the deploy/redeploy cycle to refresh
+            // the token in long-lived containers. SMOODEV-1128 follow-up
+            // will swap the exporter transport for a header-getter shim
+            // so live refresh works without a deploy.
+            const initialToken = await mintToken({
+                authUrl: env.authUrl,
+                clientId: env.clientId,
+                clientSecret: env.clientSecret,
+            });
+            if (initialToken) {
+                sharedHeaders.authorization = `Bearer ${initialToken}`;
+            } else {
+                warn('bootstrap: initial token mint failed; OTLP exports will start unauthenticated');
+            }
+            stopRefresh = scheduleTokenRefresh({
                 authUrl: env.authUrl,
                 clientId: env.clientId,
                 clientSecret: env.clientSecret,
@@ -208,49 +235,67 @@ interface RefreshConfig {
     fetcher?: typeof fetch;
 }
 
-function startTokenRefresh(config: RefreshConfig): () => void {
-    const scheduler = config.schedule ?? ((cb, ms) => setInterval(cb, ms));
-    const f = config.fetcher ?? fetch;
+/**
+ * Perform a single `client_credentials` token mint. Returns the
+ * `access_token` on success, or `undefined` on any failure (and warns
+ * to stderr). Used both for the initial sync mint at bootstrap time
+ * and for the background refresh ticks.
+ */
+async function mintToken(opts: { authUrl: string; clientId: string; clientSecret: string; fetcher?: typeof fetch }): Promise<string | undefined> {
+    const f = opts.fetcher ?? fetch;
+    try {
+        const res = await f(`${stripTrailingSlash(opts.authUrl)}/token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: new URLSearchParams({
+                grant_type: 'client_credentials',
+                provider: 'client_credentials',
+                client_id: opts.clientId,
+                client_secret: opts.clientSecret,
+            }).toString(),
+        });
+        if (!res.ok) {
+            warn(`bootstrap: token mint failed (${res.status})`);
+            return undefined;
+        }
+        const body = (await res.json()) as { access_token?: string };
+        if (!body.access_token) {
+            warn('bootstrap: token endpoint returned no access_token');
+            return undefined;
+        }
+        return body.access_token;
+    } catch (err) {
+        warn(`bootstrap: token mint error: ${err instanceof Error ? err.message : String(err)}`);
+        return undefined;
+    }
+}
 
+/**
+ * Arm a background timer that re-mints the token every
+ * TOKEN_REFRESH_INTERVAL_MS. Returns a stop function.
+ *
+ * Note: subsequent mints update `sharedHeaders` via `onToken`, but
+ * because OTel v0.55+ snapshots headers at construction, the live
+ * exporter will not pick up the refreshed value (SMOODEV-1128). In
+ * practice long-lived containers should be redeployed within the
+ * underlying JWT TTL (1h); this timer remains for future use once
+ * a header-getter transport is in place.
+ */
+function scheduleTokenRefresh(config: RefreshConfig): () => void {
+    const scheduler = config.schedule ?? ((cb, ms) => setInterval(cb, ms));
     let stopped = false;
     let timer: { unref?: () => void } | undefined;
 
-    const refresh = async () => {
-        if (stopped) return;
-        try {
-            const res = await f(`${stripTrailingSlash(config.authUrl)}/token`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    grant_type: 'client_credentials',
-                    provider: 'client_credentials',
-                    client_id: config.clientId,
-                    client_secret: config.clientSecret,
-                }).toString(),
-            });
-            if (!res.ok) {
-                warn(`bootstrap: token mint failed (${res.status}); will retry on next refresh tick`);
-                return;
-            }
-            const body = (await res.json()) as { access_token?: string };
-            if (body.access_token) {
-                config.onToken(body.access_token);
-            } else {
-                warn('bootstrap: token endpoint returned no access_token');
-            }
-        } catch (err) {
-            warn(`bootstrap: token mint error: ${err instanceof Error ? err.message : String(err)}`);
-        }
-    };
-
-    // Fire-and-forget the initial mint so the bootstrap return is sync.
-    // Exports that happen in the first ~100ms will be unauthenticated;
-    // that's a negligible window vs. the lifetime of any meaningful
-    // process and well within OTel's retry budget.
-    void refresh();
-
     timer = scheduler(() => {
-        void refresh();
+        if (stopped) return;
+        void mintToken({
+            authUrl: config.authUrl,
+            clientId: config.clientId,
+            clientSecret: config.clientSecret,
+            fetcher: config.fetcher,
+        }).then((token) => {
+            if (token && !stopped) config.onToken(token);
+        });
     }, TOKEN_REFRESH_INTERVAL_MS);
     timer.unref?.();
 
@@ -288,4 +333,10 @@ function warn(message: string): void {
 // bootstrap exactly once per process. The function is also exported (above)
 // so tests + advanced callers can pass overrides — the idempotent guard
 // inside `bootstrapObservability` makes the double-call safe.
-bootstrapObservability();
+//
+// SMOODEV-1128: top-level await is required because the initial token
+// mint must complete before the OTel exporter is constructed (the
+// exporter snapshots headers at construction; see the body comment for
+// the OTel v0.55 Object.assign behavior). target es2022 in tsdown
+// supports top-level await in ESM.
+await bootstrapObservability();
