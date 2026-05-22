@@ -1,6 +1,6 @@
 {
     "name": "@smooai/observability",
-    "version": "0.9.0",
+    "version": "0.10.0",
     "description": "Smoo AI Observability SDK — OTel-first error capture, traces, metrics, and React/Next.js integrations in a single package with subpath exports",
     "license": "MIT",
     "repository": {
