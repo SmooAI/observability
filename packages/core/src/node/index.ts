@@ -24,6 +24,7 @@
 import { Client } from '../client';
 import { registerNodeGlobalHandlers } from './global-handlers';
 import { registerOtelCapture } from './otel-capture';
+import { makeNodeTransport } from './transport';
 
 export { Client, Scope, withScope, getCurrentScope } from '../index';
 export * from '../types';
@@ -32,15 +33,28 @@ export { registerNodeGlobalHandlers, _resetNodeGlobalHandlersForTests } from './
 export { registerOtelCapture, _resetOtelCaptureForTests } from './otel-capture';
 export { observabilityMiddleware } from './middleware';
 export type { ObservabilityMiddlewareOptions } from './middleware';
+export { makeNodeTransport } from './transport';
 
 // Auto-wire on init — Node is OTel-first. Set `autoInstrumentation: false`
 // to opt out of process error handlers; the OTel capture path is always
 // registered when the SDK is initialized.
+//
+// SMOODEV-1148: also register an HTTP transport when a `dsn` is configured
+// so captureException fans out to BOTH the OTel-native capture (span events)
+// AND the webhook POST (errorEvents table → Errors dashboard). Without this,
+// Node errors never reach the Errors UI even though the SDK is correctly
+// initialized.
 const originalInit = Client.init.bind(Client);
 Client.init = (options) => {
     originalInit(options);
     registerOtelCapture();
     if (options.autoInstrumentation !== false) {
         registerNodeGlobalHandlers({ exitOnUncaught: false });
+    }
+    if (options.dsn) {
+        const transport = makeNodeTransport(options);
+        Client._registerTransport(async (batch) => {
+            for (const evt of batch) transport.enqueue(evt);
+        });
     }
 };

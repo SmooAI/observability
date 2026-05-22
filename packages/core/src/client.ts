@@ -46,9 +46,17 @@ class _Client {
 
     /**
      * Register a runtime-native capture path. When set, captureException /
-     * captureMessage route through this handler INSTEAD of the HTTP transport
-     * — node uses this to write directly to OpenTelemetry span events so the
-     * Smoo SDK speaks OTel natively. Calling with `null` un-registers.
+     * captureMessage invoke this handler IN ADDITION to the HTTP transport
+     * (SMOODEV-1148). On Node, the OTel-native capture writes span events;
+     * the HTTP transport (if also registered) POSTs the same event to the
+     * Smoo webhook so it lands in the Errors dashboard. Calling with `null`
+     * un-registers.
+     *
+     * Prior behavior was "captureHandler replaces transport" — that meant
+     * Node errors went only to OTel and never reached the webhook-backed
+     * Errors dashboard. With both paths firing, the OTel pipeline still
+     * gets the structured span event for tracing/observability, and the
+     * webhook gets the event for the Errors UI.
      */
     _registerCaptureHandler(handler: CaptureHandler | null): void {
         this.captureHandler = handler;
@@ -80,13 +88,16 @@ class _Client {
         });
         const final = this.options.beforeSend ? this.options.beforeSend(event) : event;
         if (!final) return eventId;
+        // SMOODEV-1148: fire BOTH paths when both are registered. The captureHandler
+        // (e.g. Node OTel-native) writes span events; the transport POSTs the same
+        // event to the webhook for the Errors dashboard. Order: handler first so a
+        // throwing transport doesn't suppress OTel capture.
         if (this.captureHandler) {
             try {
                 this.captureHandler(final, { error, extra });
             } catch {
                 /* swallow — observability must not throw */
             }
-            return eventId;
         }
         if (this.transport) {
             // Fire-and-forget; transport handles batching/retry.
@@ -111,13 +122,13 @@ class _Client {
         });
         const final = this.options.beforeSend ? this.options.beforeSend(event) : event;
         if (!final) return eventId;
+        // SMOODEV-1148: see captureException for rationale — fire both.
         if (this.captureHandler) {
             try {
                 this.captureHandler(final, { message });
             } catch {
                 /* swallow */
             }
-            return eventId;
         }
         if (this.transport) {
             void this.transport([final]).catch(() => {});
