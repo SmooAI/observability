@@ -123,22 +123,26 @@ describe('OTel-native captureException (node)', () => {
         expect(exceptionEvents).toHaveLength(1);
     });
 
-    it('does not call the HTTP transport when capture handler is registered', async () => {
+    it('fires BOTH the HTTP transport and the OTel capture when both are registered (SMOODEV-1148)', async () => {
         let transportCalled = 0;
         Client._registerTransport(async () => {
             transportCalled++;
         });
-        // Register capture handler AFTER transport — capture handler wins.
+        // Register capture handler AFTER transport — both should now fire.
         _resetOtelCaptureForTests();
         registerOtelCapture();
         const tracer = trace.getTracer('test');
         tracer.startActiveSpan('handler', (span) => {
-            Client.captureException(new Error('routed-to-otel'));
+            Client.captureException(new Error('routed-to-both'));
             span.end();
         });
         // Allow microtask queue to drain.
         await new Promise((r) => setImmediate(r));
-        expect(transportCalled).toBe(0);
+        // SMOODEV-1148: transport fires alongside the OTel capture so the
+        // webhook-backed Errors dashboard sees Node errors. Prior behavior
+        // was "captureHandler short-circuits transport" — see client.ts
+        // and node/index.ts for rationale.
+        expect(transportCalled).toBe(1);
         const spans = exporter.getFinishedSpans();
         expect(spans).toHaveLength(1);
     });
