@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <LangVersion>latest</LangVersion>
+        <PackageId>SmooAI.Observability</PackageId>
+        <Version>0.1.0</Version>
+        <Description>SmooAI Observability SDK for .NET — error capture + OTel</Description>
+    </PropertyGroup>
+</Project>
