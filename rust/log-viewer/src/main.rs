@@ -288,6 +288,7 @@ struct App {
     active_view: RemoteView,
     remote_logs: std::collections::HashMap<uuid::Uuid, view::logs::RemoteLogsView>,
     remote_errors: std::collections::HashMap<uuid::Uuid, view::errors::RemoteErrorsView>,
+    remote_metrics: std::collections::HashMap<uuid::Uuid, view::metrics::RemoteMetricsView>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -302,6 +303,7 @@ enum RemoteView {
     #[default]
     Logs,
     Errors,
+    Metrics,
 }
 
 impl Default for App {
@@ -352,6 +354,7 @@ impl Default for App {
             active_view: RemoteView::default(),
             remote_logs: std::collections::HashMap::new(),
             remote_errors: std::collections::HashMap::new(),
+            remote_metrics: std::collections::HashMap::new(),
         }
     }
 }
@@ -1560,6 +1563,7 @@ impl eframe::App for App {
                         for (label, value) in [
                             ("📜 Logs", RemoteView::Logs),
                             ("⚠ Errors", RemoteView::Errors),
+                            ("📊 Metrics", RemoteView::Metrics),
                         ] {
                             if ui
                                 .selectable_label(self.active_view == value, label)
@@ -1584,6 +1588,13 @@ impl eframe::App for App {
                             .remote_errors
                             .entry(org_id)
                             .or_insert_with(|| view::errors::RemoteErrorsView::for_org(org_id));
+                        view.ui(ui, &api, &rt_handle);
+                    }
+                    RemoteView::Metrics => {
+                        let view = self
+                            .remote_metrics
+                            .entry(org_id)
+                            .or_insert_with(|| view::metrics::RemoteMetricsView::for_org(org_id));
                         view.ui(ui, &api, &rt_handle);
                     }
                 });

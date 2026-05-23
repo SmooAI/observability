@@ -29,6 +29,7 @@ rfd = "0.15"
 eframe = { version = "0.28", features = ["persistence"] }
 egui = "0.28"
 egui_extras = "0.28"
+egui_plot = "0.28"
 image = { version = "0.25", default-features = false, features = ["png"] }
 duckdb = { version = "1.4", features = ["bundled"] }
 
