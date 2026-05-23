@@ -13,6 +13,7 @@ use crate::auth::{AuthError, AuthManager, API_BASE};
 
 pub mod errors;
 pub mod logs;
+pub mod metrics;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
