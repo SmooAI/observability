@@ -1,5 +1,7 @@
 #![allow(dead_code)]
-use eframe::egui::{self, Color32, Margin, Rounding, Stroke, Visuals};
+use eframe::egui::{self, Color32, FontFamily, FontId, Margin, Rounding, Stroke, TextStyle, Visuals};
+
+pub mod fonts;
 
 /// Local log-level enum, decoupled from any external logger crate. This used to
 /// pull from `smooai_logger::Level` when the viewer lived inside the logger
@@ -139,29 +141,57 @@ pub fn apply_visuals(ctx: &egui::Context, dark: bool) {
     };
     visuals.hyperlink_color = theme.primary;
 
-    let rounding = Rounding::same(8.0);
+    let rounding = Rounding::same(10.0);
+    let pill_rounding = Rounding::same(14.0);
     visuals.widgets.noninteractive.rounding = rounding;
-    visuals.widgets.inactive.rounding = rounding;
-    visuals.widgets.hovered.rounding = rounding;
-    visuals.widgets.active.rounding = rounding;
-    visuals.widgets.open.rounding = rounding;
+    visuals.widgets.inactive.rounding = pill_rounding;
+    visuals.widgets.hovered.rounding = pill_rounding;
+    visuals.widgets.active.rounding = pill_rounding;
+    visuals.widgets.open.rounding = pill_rounding;
 
-    visuals.window_stroke = Stroke {
-        width: 1.0,
-        color: theme.border,
-    };
+    // Softer, fainter strokes — modern desktop chrome reads better with low-
+    // contrast borders than the egui defaults.
+    let border_soft = Color32::from_rgba_unmultiplied(theme.border.r(), theme.border.g(), theme.border.b(), 90);
+    let border_faint = Color32::from_rgba_unmultiplied(theme.border.r(), theme.border.g(), theme.border.b(), 50);
+    visuals.window_stroke = Stroke { width: 1.0, color: border_soft };
+    visuals.widgets.noninteractive.bg_stroke = Stroke { width: 1.0, color: border_faint };
+    visuals.widgets.inactive.bg_stroke = Stroke { width: 1.0, color: border_faint };
+    visuals.widgets.hovered.bg_stroke = Stroke { width: 1.0, color: theme.primary };
+    visuals.widgets.active.bg_stroke = Stroke { width: 1.0, color: theme.primary };
+
     visuals.widgets.noninteractive.bg_fill = theme.background;
-    visuals.widgets.inactive.bg_fill = lerp(theme.background, theme.muted, 0.05);
+    visuals.widgets.inactive.bg_fill = lerp(theme.background, theme.muted, 0.04);
     visuals.widgets.hovered.bg_fill = lerp(theme.background, theme.muted, 0.10);
-    visuals.widgets.active.bg_fill = lerp(theme.background, theme.muted, 0.15);
+    visuals.widgets.active.bg_fill = lerp(theme.background, theme.muted, 0.18);
 
     ctx.set_visuals(visuals.clone());
 
     let mut style = (*ctx.style()).clone();
     style.visuals = visuals;
-    style.spacing.item_spacing = egui::vec2(8.0, 6.0);
-    style.spacing.window_margin = Margin::same(12.0);
     style.visuals.window_rounding = rounding;
+
+    // Generous spacing — egui's defaults are tight for a desktop app. Bumping
+    // these has the same effect on perceived quality as a custom font does.
+    style.spacing.item_spacing = egui::vec2(10.0, 8.0);
+    style.spacing.button_padding = egui::vec2(12.0, 6.0);
+    style.spacing.window_margin = Margin::same(16.0);
+    style.spacing.menu_margin = Margin::same(8.0);
+    style.spacing.indent = 18.0;
+    style.spacing.interact_size.y = 28.0;
+    style.spacing.icon_width = 18.0;
+    style.spacing.icon_spacing = 6.0;
+
+    // Typography hierarchy. Inter is the proportional face installed by
+    // `fonts::install`; Monospace is JetBrains Mono.
+    style.text_styles = [
+        (TextStyle::Heading, FontId::new(20.0, FontFamily::Proportional)),
+        (TextStyle::Body, FontId::new(14.0, FontFamily::Proportional)),
+        (TextStyle::Monospace, FontId::new(13.0, FontFamily::Monospace)),
+        (TextStyle::Button, FontId::new(14.0, FontFamily::Proportional)),
+        (TextStyle::Small, FontId::new(12.0, FontFamily::Proportional)),
+    ]
+    .into();
+
     ctx.set_style(style);
 }
 

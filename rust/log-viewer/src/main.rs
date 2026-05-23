@@ -360,6 +360,180 @@ impl Default for App {
 }
 
 impl App {
+    /// Left navigation rail (SMOODEV-1207). Owns source + view selection so
+    /// every navigation lives in one place.
+    fn render_nav_rail(&mut self, ctx: &egui::Context) {
+        use widgets::nav_rail::{item, section_header, NavItem, NavTarget};
+
+        let accent = theme::smoo::GREEN;
+        let mut click: Option<NavTarget> = None;
+
+        egui::SidePanel::left("nav-rail")
+            .resizable(false)
+            .exact_width(220.0)
+            .frame(
+                egui::Frame::none()
+                    .fill(theme::lerp(
+                        ctx.style().visuals.panel_fill,
+                        theme::smoo::DARK_BLUE,
+                        0.18,
+                    ))
+                    .inner_margin(egui::Margin::same(12.0))
+                    .stroke(egui::Stroke {
+                        width: 1.0,
+                        color: Color32::from_rgba_unmultiplied(0xbb, 0xde, 0xf0, 30),
+                    }),
+            )
+            .show(ctx, |ui| {
+                // Logo + product mark.
+                if let Some(tex) = &self.logo_texture {
+                    let scale = 28.0_f32 / self.logo_size.x.max(1.0);
+                    ui.add(Image::new(tex).fit_to_exact_size(self.logo_size * scale));
+                }
+                ui.label(
+                    RichText::new("Observability Studio")
+                        .small()
+                        .color(Color32::from_gray(160)),
+                );
+                ui.add_space(12.0);
+
+                section_header(ui, "Sources");
+                if item(
+                    ui,
+                    accent,
+                    &NavItem {
+                        target: NavTarget::SourceLocal,
+                        icon: "💾",
+                        label: "Local",
+                        active: matches!(self.active_source, ActiveSource::Local),
+                    },
+                )
+                .clicked()
+                {
+                    click = Some(NavTarget::SourceLocal);
+                }
+                for entry in &self.settings.registry.entries {
+                    let target = NavTarget::SourceRemote(entry.org_id);
+                    if item(
+                        ui,
+                        accent,
+                        &NavItem {
+                            target,
+                            icon: "☁",
+                            label: &entry.label,
+                            active: matches!(
+                                self.active_source,
+                                ActiveSource::Remote(o) if o == entry.org_id
+                            ),
+                        },
+                    )
+                    .clicked()
+                    {
+                        click = Some(target);
+                    }
+                }
+
+                // Views section only applies when a remote source is active —
+                // local has its own filter sidebar.
+                if matches!(self.active_source, ActiveSource::Remote(_)) {
+                    section_header(ui, "Views");
+                    for (icon, label, view) in [
+                        ("📜", "Logs", RemoteView::Logs),
+                        ("⚠", "Errors", RemoteView::Errors),
+                        ("📊", "Metrics", RemoteView::Metrics),
+                    ] {
+                        let target = match view {
+                            RemoteView::Logs => NavTarget::ViewLogs,
+                            RemoteView::Errors => NavTarget::ViewErrors,
+                            RemoteView::Metrics => NavTarget::ViewMetrics,
+                        };
+                        if item(
+                            ui,
+                            accent,
+                            &NavItem {
+                                target,
+                                icon,
+                                label,
+                                active: self.active_view == view,
+                            },
+                        )
+                        .clicked()
+                        {
+                            click = Some(target);
+                        }
+                    }
+                }
+
+                ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
+                    if item(
+                        ui,
+                        accent,
+                        &NavItem {
+                            target: NavTarget::OpenSettings,
+                            icon: "⚙",
+                            label: "Settings",
+                            active: self.settings.open,
+                        },
+                    )
+                    .clicked()
+                    {
+                        click = Some(NavTarget::OpenSettings);
+                    }
+                });
+            });
+
+        if let Some(target) = click {
+            match target {
+                NavTarget::SourceLocal => self.active_source = ActiveSource::Local,
+                NavTarget::SourceRemote(id) => self.active_source = ActiveSource::Remote(id),
+                NavTarget::ViewLogs => self.active_view = RemoteView::Logs,
+                NavTarget::ViewErrors => self.active_view = RemoteView::Errors,
+                NavTarget::ViewMetrics => self.active_view = RemoteView::Metrics,
+                NavTarget::OpenSettings => self.settings.open = !self.settings.open,
+            }
+            ctx.request_repaint();
+        }
+    }
+
+    /// Bottom status bar (SMOODEV-1207). Always rendered.
+    fn render_status_bar(&self, ctx: &egui::Context) {
+        let api_base = crate::auth::API_BASE;
+        let source_label: String = match self.active_source {
+            ActiveSource::Local => "💾 Local logs".to_string(),
+            ActiveSource::Remote(id) => self
+                .settings
+                .registry
+                .entries
+                .iter()
+                .find(|e| e.org_id == id)
+                .map(|e| format!("☁ {}", e.label))
+                .unwrap_or_else(|| "☁ unknown".to_string()),
+        };
+        egui::TopBottomPanel::bottom("status-bar")
+            .frame(
+                egui::Frame::none()
+                    .fill(theme::lerp(
+                        ctx.style().visuals.panel_fill,
+                        theme::smoo::DARK_BLUE,
+                        0.30,
+                    ))
+                    .inner_margin(egui::Margin::symmetric(12.0, 6.0))
+                    .stroke(egui::Stroke {
+                        width: 1.0,
+                        color: Color32::from_rgba_unmultiplied(0xbb, 0xde, 0xf0, 30),
+                    }),
+            )
+            .show(ctx, |ui| {
+                widgets::status_bar::StatusBar {
+                    api_base,
+                    source_label: &source_label,
+                    last_refresh: None,
+                    error: None,
+                }
+                .ui(ui);
+            });
+    }
+
     fn start_index(&mut self, path: PathBuf, ctx: &egui::Context) {
         self.status = format!("Indexing {}…", path.display());
         self.index_progress = None;
@@ -1521,60 +1695,28 @@ impl eframe::App for App {
                 }
                 ui.separator();
             });
-
-            // -- Source picker row (phase 3 — SMOODEV-1187). Lets the user
-            // switch between the local .smooai-logs/ source and any remote org
-            // configured under Settings.
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("Source:").small().color(Color32::from_gray(160)));
-                if ui
-                    .selectable_label(self.active_source == ActiveSource::Local, "💾 Local")
-                    .clicked()
-                {
-                    self.active_source = ActiveSource::Local;
-                    ctx.request_repaint();
-                }
-                for entry in &self.settings.registry.entries {
-                    let active = self.active_source == ActiveSource::Remote(entry.org_id);
-                    let label = format!("☁ {}", entry.label);
-                    if ui.selectable_label(active, label).clicked() {
-                        self.active_source = ActiveSource::Remote(entry.org_id);
-                        ctx.request_repaint();
-                    }
-                }
-            });
         });
 
-        // Settings panel (phase 2 — SMOODEV-1186). Renders as a floating window
-        // when toggled on. Returns `true` when the org registry changed; we
-        // persist on the next eframe save_state call automatically.
+        // Settings panel (phase 2 — SMOODEV-1186). Renders as a floating
+        // window when toggled on.
         if let (Some(auth), Some(rt)) = (self.auth.as_ref(), self.runtime.as_ref()) {
             let _changed = self.settings.ui(ctx, auth, rt.handle());
         }
 
-        // -- Remote-source branch (phases 3+4). Renders a view sub-tab strip
-        // plus the currently selected view in a CentralPanel, bypassing the
-        // local SidePanel + CentralPanel below.
+        // -- Left nav rail (SMOODEV-1207). Always rendered. Owns both source
+        // selection (Local + each org) and — when a remote source is active —
+        // view selection (Logs / Errors / Metrics) plus a Settings entry.
+        self.render_nav_rail(ctx);
+
+        // -- Bottom status bar (SMOODEV-1207). Always rendered.
+        self.render_status_bar(ctx);
+
+        // -- Remote-source branch (phases 3+4). Renders the currently selected
+        // view in a CentralPanel; the nav rail above already owns source +
+        // view switching.
         if let ActiveSource::Remote(org_id) = self.active_source {
             if let (Some(api), Some(rt)) = (self.api.clone(), self.runtime.as_ref()) {
                 let rt_handle = rt.handle().clone();
-                egui::TopBottomPanel::top("remote-view-tabs").show(ctx, |ui| {
-                    ui.horizontal(|ui| {
-                        for (label, value) in [
-                            ("📜 Logs", RemoteView::Logs),
-                            ("⚠ Errors", RemoteView::Errors),
-                            ("📊 Metrics", RemoteView::Metrics),
-                        ] {
-                            if ui
-                                .selectable_label(self.active_view == value, label)
-                                .clicked()
-                            {
-                                self.active_view = value;
-                                ctx.request_repaint();
-                            }
-                        }
-                    });
-                });
                 egui::CentralPanel::default().show(ctx, |ui| match self.active_view {
                     RemoteView::Logs => {
                         let view = self
@@ -2353,7 +2495,12 @@ fn main() -> Result<()> {
 
     let app_factory = {
         let runtime = runtime.clone();
-        move |_cc: &eframe::CreationContext<'_>| -> std::result::Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>> {
+        move |cc: &eframe::CreationContext<'_>| -> std::result::Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>> {
+            // Install branded fonts (Inter + JetBrains Mono) + apply visuals
+            // before the first frame renders. Subsequent dark-mode toggles
+            // re-apply via the existing per-frame path in update().
+            theme::fonts::install(&cc.egui_ctx);
+            theme::apply_visuals(&cc.egui_ctx, true);
             let mut app = App::default();
             app.runtime = Some(runtime.clone());
             app.auth = Some(auth_mgr.clone());
