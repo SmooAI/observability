@@ -1,4 +1,7 @@
 //! Reusable egui widgets (heatmap, KPI cards, stack-frame viewer, time-range
-//! picker, etc.). Stubs for now; populated in later phases.
+//! picker, etc.). Populated incrementally per phase.
 
 #![allow(dead_code)]
+
+pub mod kpi_card;
+pub mod time_range;
