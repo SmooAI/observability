@@ -16,12 +16,19 @@ use views::{ErrorsView, LogsView, MetricsView, SettingsDialog, WelcomeView};
 
 #[component]
 pub fn App() -> Element {
-    // Install global signals + load persisted org registry.
+    // Install global signals + load persisted org registry + UI state.
     state::use_bootstrap();
 
     let active_source = use_context::<Signal<ActiveSource>>();
     let active_view = use_context::<Signal<RemoteView>>();
     let settings_open = use_context::<Signal<bool>>();
+
+    // Persist active_source + active_view whenever either changes so the next
+    // launch lands where the user left off. `use_effect` re-runs when its
+    // dependencies (read via the signal getter) change.
+    use_effect(move || {
+        state::persist_ui_state(active_source(), active_view());
+    });
 
     rsx! {
         // Two style blocks: shared brand foundation first (so app overrides

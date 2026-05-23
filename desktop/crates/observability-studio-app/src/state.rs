@@ -10,7 +10,7 @@ use dioxus::prelude::*;
 use observability_studio_client::AuthManager;
 use uuid::Uuid;
 
-use crate::persistence::{self, OrgEntry, OrgRegistry};
+use crate::persistence::{self, OrgEntry, OrgRegistry, PersistedSource, PersistedView, UiState};
 
 /// Which data source the user is currently viewing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -55,18 +55,54 @@ impl ApiState {
     }
 }
 
-/// Install the three top-level signals + the shared API state. Call from the
-/// App component root.
+/// Install the top-level signals + the shared API state. Call from the App
+/// component root. Both `active_source` and `active_view` rehydrate from
+/// `<config_dir>/ui-state.json` so the user lands where they left off.
 pub fn use_bootstrap() {
-    use_context_provider::<Signal<ActiveSource>>(|| {
-        Signal::new(ActiveSource::default())
-    });
-    use_context_provider::<Signal<RemoteView>>(|| Signal::new(RemoteView::default()));
+    let registry = persistence::OrgRegistry::load_or_default();
+    let saved = UiState::load_or_default();
+
+    // Rehydrate active_source — but if the persisted remote org no longer
+    // exists in the registry (user removed it offline), gracefully fall back
+    // to Local rather than rendering a stuck "unknown org" header.
+    let initial_source = match saved.active_source {
+        PersistedSource::Local => ActiveSource::Local,
+        PersistedSource::Remote { org_id } => {
+            if registry.entries.iter().any(|e| e.org_id == org_id) {
+                ActiveSource::Remote(org_id)
+            } else {
+                ActiveSource::Local
+            }
+        }
+    };
+    let initial_view = match saved.active_view {
+        PersistedView::Logs => RemoteView::Logs,
+        PersistedView::Errors => RemoteView::Errors,
+        PersistedView::Metrics => RemoteView::Metrics,
+    };
+
+    use_context_provider::<Signal<ActiveSource>>(move || Signal::new(initial_source));
+    use_context_provider::<Signal<RemoteView>>(move || Signal::new(initial_view));
     use_context_provider::<Signal<bool>>(|| Signal::new(false));
-    use_context_provider::<Signal<OrgRegistry>>(|| {
-        Signal::new(persistence::OrgRegistry::load_or_default())
-    });
+    use_context_provider::<Signal<OrgRegistry>>(move || Signal::new(registry));
     use_context_provider::<Arc<ApiState>>(|| Arc::new(ApiState::new()));
+}
+
+/// Snapshot the current source + view to disk. Called from the App's
+/// `use_effect` when either signal changes.
+pub fn persist_ui_state(source: ActiveSource, view: RemoteView) {
+    let state = UiState {
+        active_source: match source {
+            ActiveSource::Local => PersistedSource::Local,
+            ActiveSource::Remote(org_id) => PersistedSource::Remote { org_id },
+        },
+        active_view: match view {
+            RemoteView::Logs => PersistedView::Logs,
+            RemoteView::Errors => PersistedView::Errors,
+            RemoteView::Metrics => PersistedView::Metrics,
+        },
+    };
+    state.save();
 }
 
 /// Convenience accessor used across views to find the entry for the current
