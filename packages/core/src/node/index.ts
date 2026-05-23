@@ -34,13 +34,7 @@ export { registerOtelCapture, _resetOtelCaptureForTests } from './otel-capture';
 export { observabilityMiddleware } from './middleware';
 export type { ObservabilityMiddlewareOptions } from './middleware';
 export { makeNodeTransport } from './transport';
-export {
-    setGenAIAttributes,
-    recordGenAIMessage,
-    type GenAIAttributes,
-    type GenAIOperationName,
-    type GenAISystem,
-} from '../gen-ai-attributes';
+export { setGenAIAttributes, recordGenAIMessage, type GenAIAttributes, type GenAIOperationName, type GenAISystem } from '../gen-ai-attributes';
 
 // Auto-wire on init — Node is OTel-first. Set `autoInstrumentation: false`
 // to opt out of process error handlers; the OTel capture path is always
