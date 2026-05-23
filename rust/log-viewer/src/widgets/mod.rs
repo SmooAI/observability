@@ -4,4 +4,5 @@
 #![allow(dead_code)]
 
 pub mod kpi_card;
+pub mod stack_frame;
 pub mod time_range;

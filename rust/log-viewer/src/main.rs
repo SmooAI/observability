@@ -283,7 +283,11 @@ struct App {
     // `None` means the local `.smooai-logs/` view (the existing UI below).
     // `Some(uuid)` means the remote logs view for that org.
     active_source: ActiveSource,
+    // Phase 4 (SMOODEV-1188): when a Remote source is active, which dashboard
+    // view is showing (Logs / Errors / Metrics(later) / …).
+    active_view: RemoteView,
     remote_logs: std::collections::HashMap<uuid::Uuid, view::logs::RemoteLogsView>,
+    remote_errors: std::collections::HashMap<uuid::Uuid, view::errors::RemoteErrorsView>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -291,6 +295,13 @@ enum ActiveSource {
     #[default]
     Local,
     Remote(uuid::Uuid),
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum RemoteView {
+    #[default]
+    Logs,
+    Errors,
 }
 
 impl Default for App {
@@ -338,7 +349,9 @@ impl Default for App {
             api: None,
             settings: view::settings::SettingsState::default(),
             active_source: ActiveSource::default(),
+            active_view: RemoteView::default(),
             remote_logs: std::collections::HashMap::new(),
+            remote_errors: std::collections::HashMap::new(),
         }
     }
 }
@@ -1536,17 +1549,43 @@ impl eframe::App for App {
             let _changed = self.settings.ui(ctx, auth, rt.handle());
         }
 
-        // -- Remote-source branch (phase 3). Renders the logs view in a
-        // CentralPanel and bypasses the local SidePanel + CentralPanel below.
+        // -- Remote-source branch (phases 3+4). Renders a view sub-tab strip
+        // plus the currently selected view in a CentralPanel, bypassing the
+        // local SidePanel + CentralPanel below.
         if let ActiveSource::Remote(org_id) = self.active_source {
             if let (Some(api), Some(rt)) = (self.api.clone(), self.runtime.as_ref()) {
                 let rt_handle = rt.handle().clone();
-                let view = self
-                    .remote_logs
-                    .entry(org_id)
-                    .or_insert_with(|| view::logs::RemoteLogsView::for_org(org_id));
-                egui::CentralPanel::default().show(ctx, |ui| {
-                    view.ui(ui, &api, &rt_handle);
+                egui::TopBottomPanel::top("remote-view-tabs").show(ctx, |ui| {
+                    ui.horizontal(|ui| {
+                        for (label, value) in [
+                            ("📜 Logs", RemoteView::Logs),
+                            ("⚠ Errors", RemoteView::Errors),
+                        ] {
+                            if ui
+                                .selectable_label(self.active_view == value, label)
+                                .clicked()
+                            {
+                                self.active_view = value;
+                                ctx.request_repaint();
+                            }
+                        }
+                    });
+                });
+                egui::CentralPanel::default().show(ctx, |ui| match self.active_view {
+                    RemoteView::Logs => {
+                        let view = self
+                            .remote_logs
+                            .entry(org_id)
+                            .or_insert_with(|| view::logs::RemoteLogsView::for_org(org_id));
+                        view.ui(ui, &api, &rt_handle);
+                    }
+                    RemoteView::Errors => {
+                        let view = self
+                            .remote_errors
+                            .entry(org_id)
+                            .or_insert_with(|| view::errors::RemoteErrorsView::for_org(org_id));
+                        view.ui(ui, &api, &rt_handle);
+                    }
                 });
                 return;
             }
