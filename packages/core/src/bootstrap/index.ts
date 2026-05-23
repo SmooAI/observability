@@ -70,6 +70,7 @@
  * SMOODEV-1067.
  */
 
+import { TokenProvider } from '../auth/token-provider';
 import { Client } from '../node';
 import { setupOtelSdk, type OtelSdkHandle, type SetupOtelOptions } from '../otel';
 
@@ -120,45 +121,38 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
         return bootstrapped;
     }
 
-    // SMOODEV-1128: OTel's OTLP HTTP exporter (v0.55+) `mergeHeaders`
-    // does `Object.assign({}, fallback, userProvided)` — it COPIES keys
-    // into a fresh object at construction time, so mutating the
-    // sharedHeaders object after `setupOtelSdk` runs is invisible to
-    // the exporter. We must populate Authorization BEFORE constructing
-    // the SDK, hence the async mint below.
+    // SMOODEV-1206: token auth flow. Previously this minted once + scheduled
+    // a refresh, but the OTel JS v0.55 OTLP HTTP exporter Object.assigns its
+    // headers at construction time — the original snapshot lived forever and
+    // every export 401'd after the first token expired (~1h). Fix: pass a
+    // TokenProvider into setupOtelSdk; the custom AuthInjectingTraceExporter
+    // pulls a fresh Bearer from it on every request. Mirrors how every other
+    // smoo SDK (config, fetch, file) handles client_credentials auth.
+    //
+    // The static-token + sharedHeaders path is retained for the
+    // SMOOAI_OBSERVABILITY_TOKEN escape hatch — pre-minted tokens stay
+    // snapshotted (caller's responsibility to keep them fresh).
     const sharedHeaders: Record<string, string> = {};
+    let tokenProvider: TokenProvider | undefined;
 
     let stopRefresh = () => {};
     try {
         if (env.token) {
             sharedHeaders.authorization = `Bearer ${env.token}`;
         } else if (env.authUrl && env.clientId && env.clientSecret) {
-            // Mint synchronously (await) so the Authorization header is
-            // present when setupOtelSdk constructs the exporter below.
-            // The background refresh schedules subsequent mints but, for
-            // the same Object.assign reason, those won't update the live
-            // exporter — we rely on the deploy/redeploy cycle to refresh
-            // the token in long-lived containers. SMOODEV-1128 follow-up
-            // will swap the exporter transport for a header-getter shim
-            // so live refresh works without a deploy.
-            const initialToken = await mintToken({
+            // SMOODEV-1206: construct the per-request TokenProvider and
+            // also do a synchronous warm-up mint so the very first OTLP
+            // export doesn't pay the round-trip latency.
+            tokenProvider = new TokenProvider({
                 authUrl: env.authUrl,
                 clientId: env.clientId,
                 clientSecret: env.clientSecret,
             });
-            if (initialToken) {
-                sharedHeaders.authorization = `Bearer ${initialToken}`;
-            } else {
-                warn('bootstrap: initial token mint failed; OTLP exports will start unauthenticated');
+            try {
+                await tokenProvider.getAccessToken();
+            } catch (mintErr) {
+                warn(`bootstrap: initial token mint failed; OTLP exports will retry on first export: ${mintErr instanceof Error ? mintErr.message : String(mintErr)}`);
             }
-            stopRefresh = scheduleTokenRefresh({
-                authUrl: env.authUrl,
-                clientId: env.clientId,
-                clientSecret: env.clientSecret,
-                onToken: (token) => {
-                    sharedHeaders.authorization = `Bearer ${token}`;
-                },
-            });
         } else {
             // Neither auth mode configured. SDK still starts; exports will
             // 401 against gated ingest URLs. Better than crashing the host.
@@ -184,7 +178,9 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
             environment: env.environment,
             release: env.release,
             otlpEndpoint: tracesEndpoint,
+            otlpMetricsEndpoint: metricsEndpoint,
             otlpHeaders: sharedHeaders,
+            tokenProvider,
         };
 
         const otel = setupOtelSdk(otelOptions);
