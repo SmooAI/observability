@@ -11,6 +11,8 @@ use uuid::Uuid;
 
 use crate::auth::{AuthError, AuthManager, API_BASE};
 
+pub mod logs;
+
 #[derive(Debug, thiserror::Error)]
 pub enum ApiError {
     #[error("auth: {0}")]

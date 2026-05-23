@@ -378,6 +378,332 @@ input {
     padding: var(--space-8) var(--space-6);
 }
 
+/* ===========================================================
+ *  Time-range picker (segmented control)
+ * =========================================================== */
+
+.time-range {
+    display: inline-flex;
+    gap: 2px;
+    padding: 2px;
+    background: oklch(0.13 0.04 265 / 0.7);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+}
+
+.time-range__btn {
+    padding: 4px 10px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--foreground-muted);
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
+}
+
+.time-range__btn:hover {
+    color: var(--foreground);
+    background: oklch(89% 0.04 230 / 0.06);
+}
+
+.time-range__btn--active {
+    background: var(--accent-soft);
+    color: var(--foreground);
+}
+
+/* ===========================================================
+ *  Toolbar — header strip above the logs table
+ * =========================================================== */
+
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-6);
+    border-bottom: 1px solid var(--border);
+    background: oklch(0.13 0.04 265 / 0.45);
+}
+
+.toolbar__search {
+    flex: 1;
+    min-width: 200px;
+    height: 32px;
+    padding: 0 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background: oklch(0.13 0.04 265 / 0.6);
+    color: var(--foreground);
+    font-size: 13px;
+}
+
+.toolbar__search::placeholder {
+    color: var(--foreground-subtle);
+}
+
+.toolbar__search:focus {
+    outline: none;
+    border-color: var(--ring);
+}
+
+.toolbar__spacer {
+    flex: 1;
+}
+
+.toolbar__meta {
+    font-size: 11px;
+    color: var(--foreground-subtle);
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===========================================================
+ *  KPI tiles
+ * =========================================================== */
+
+.kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-6) var(--space-2);
+}
+
+.kpi-tile {
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-lg);
+    background: radial-gradient(circle at top left, oklch(70% 0.13 195 / 0.05), transparent 55%), var(--surface);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.kpi-tile__label {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--foreground-subtle);
+}
+
+.kpi-tile__value {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.kpi-tile__value--accent {
+    color: oklch(0.657 0.112 194.8);
+}
+
+.kpi-tile__value--warning {
+    color: oklch(0.769 0.164 71);
+}
+
+.kpi-tile__value--destructive {
+    color: var(--destructive);
+}
+
+/* ===========================================================
+ *  Logs table
+ * =========================================================== */
+
+.logs {
+    flex: 1;
+    overflow: auto;
+    padding: 0 var(--space-6) var(--space-6);
+}
+
+.logs__table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    background: transparent;
+    font-size: 12.5px;
+}
+
+.logs__th {
+    position: sticky;
+    top: 0;
+    background: oklch(0.13 0.04 265 / 0.95);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    text-align: left;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--foreground-subtle);
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+}
+
+.logs__row {
+    cursor: pointer;
+    transition: background-color 100ms ease;
+}
+
+.logs__row:hover {
+    background: oklch(89% 0.04 230 / 0.04);
+}
+
+.logs__row--expanded {
+    background: oklch(89% 0.04 230 / 0.06);
+}
+
+.logs__td {
+    padding: 6px 10px;
+    border-bottom: 1px solid oklch(0.3 0.008 260 / 0.5);
+    vertical-align: top;
+}
+
+.logs__ts {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--foreground-muted);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.logs__level {
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.logs__level--info {
+    color: oklch(0.725 0.102 233.4);
+    background: oklch(0.725 0.102 233.4 / 0.1);
+}
+
+.logs__level--warn {
+    color: oklch(0.769 0.164 71);
+    background: oklch(0.769 0.164 71 / 0.12);
+}
+
+.logs__level--error,
+.logs__level--fatal {
+    color: var(--destructive);
+    background: oklch(0.712 0.181 22.4 / 0.12);
+}
+
+.logs__level--debug,
+.logs__level--trace {
+    color: var(--foreground-subtle);
+    background: oklch(0.715 0 89.9 / 0.1);
+}
+
+.logs__fn {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--foreground-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 220px;
+}
+
+.logs__msg {
+    color: var(--foreground);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
+.logs__row--expanded .logs__msg {
+    display: block;
+    -webkit-line-clamp: unset;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.logs__status {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+
+.logs__status--2xx {
+    color: oklch(0.657 0.112 194.8);
+}
+
+.logs__status--3xx {
+    color: oklch(0.725 0.102 233.4);
+}
+
+.logs__status--4xx {
+    color: oklch(0.769 0.164 71);
+}
+
+.logs__status--5xx {
+    color: var(--destructive);
+}
+
+.logs__detail {
+    padding: var(--space-3) var(--space-4);
+    background: oklch(0.13 0.04 265 / 0.55);
+    border-top: 1px solid oklch(0.3 0.008 260 / 0.4);
+    border-bottom: 1px solid oklch(0.3 0.008 260 / 0.4);
+}
+
+.logs__detail-grid {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    column-gap: var(--space-4);
+    row-gap: 4px;
+}
+
+.logs__detail-key {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--foreground-subtle);
+    text-transform: lowercase;
+}
+
+.logs__detail-val {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    color: var(--foreground);
+    word-break: break-word;
+}
+
+.logs__detail-section {
+    margin-top: var(--space-3);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--foreground-subtle);
+}
+
+.logs__empty,
+.logs__loading {
+    padding: var(--space-8) var(--space-6);
+    text-align: center;
+    color: var(--foreground-subtle);
+    font-size: 13px;
+}
+
+.logs__error {
+    margin: 0 var(--space-6) var(--space-3);
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    background: oklch(0.712 0.181 22.4 / 0.1);
+    border: 1px solid oklch(0.712 0.181 22.4 / 0.35);
+    color: var(--destructive);
+    font-size: 12.5px;
+}
+
 /*
  * The .btn family (.btn, .btn--primary, .btn--ghost, .btn--outline,
  * .btn--icon, .btn--lg) is owned by `@smooai/ui` and shipped via
