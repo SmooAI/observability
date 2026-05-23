@@ -9,9 +9,9 @@ pub mod persistence;
 pub mod state;
 pub mod views;
 
-use components::{NavRail, StatusBar};
+use components::{CommandPalette, NavRail, StatusBar};
 use observability_studio_theme::{APP_STYLES, BRAND_STYLES};
-use state::{ActiveSource, RemoteView};
+use state::{ActiveSource, PaletteOpen, RemoteView};
 use views::{ErrorsView, LogsView, MetricsView, SettingsDialog, WelcomeView};
 
 #[component]
@@ -22,6 +22,7 @@ pub fn App() -> Element {
     let active_source = use_context::<Signal<ActiveSource>>();
     let active_view = use_context::<Signal<RemoteView>>();
     let settings_open = use_context::<Signal<bool>>();
+    let mut palette_open = use_context::<Signal<PaletteOpen>>();
 
     // Persist active_source + active_view whenever either changes so the next
     // launch lands where the user left off. `use_effect` re-runs when its
@@ -35,7 +36,21 @@ pub fn App() -> Element {
         // win on conflict via cascade), then this app's own shell + view CSS.
         style { "{BRAND_STYLES}" }
         style { "{APP_STYLES}" }
-        div { class: "shell",
+        div {
+            class: "shell",
+            tabindex: 0,
+            // Global Cmd/Ctrl+K — toggle the palette. Bound on the root
+            // (focusable via `tabindex: 0`) so it works regardless of which
+            // panel currently has focus.
+            onkeydown: move |evt: KeyboardEvent| {
+                if evt.key() == Key::Character("k".to_string())
+                    && (evt.modifiers().meta() || evt.modifiers().ctrl())
+                {
+                    let cur = palette_open().0;
+                    palette_open.set(PaletteOpen(!cur));
+                    evt.prevent_default();
+                }
+            },
             div { class: "shell__body",
                 NavRail {}
                 main { class: "shell__main",
@@ -46,6 +61,9 @@ pub fn App() -> Element {
         }
         if settings_open() {
             SettingsDialog {}
+        }
+        if palette_open().0 {
+            CommandPalette {}
         }
     }
 }

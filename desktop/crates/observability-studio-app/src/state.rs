@@ -86,7 +86,16 @@ pub fn use_bootstrap() {
     use_context_provider::<Signal<bool>>(|| Signal::new(false));
     use_context_provider::<Signal<OrgRegistry>>(move || Signal::new(registry));
     use_context_provider::<Arc<ApiState>>(|| Arc::new(ApiState::new()));
+    // Command palette open-state — disambiguated from the Settings open
+    // signal by its newtype wrapper. Dioxus context lookups are by-type so
+    // two `Signal<bool>` providers can't coexist.
+    use_context_provider::<Signal<PaletteOpen>>(|| Signal::new(PaletteOpen(false)));
 }
+
+/// Newtype wrapper so the palette's open-state has its own context slot
+/// distinct from the Settings dialog's `Signal<bool>`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct PaletteOpen(pub bool);
 
 /// Snapshot the current source + view to disk. Called from the App's
 /// `use_effect` when either signal changes.
