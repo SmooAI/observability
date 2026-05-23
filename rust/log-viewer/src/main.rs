@@ -272,6 +272,13 @@ struct App {
     column_widths: HashMap<String, f32>,
     index_progress: Option<(usize, usize)>,
     db_conn: Option<Connection>,
+    // Phase 2 (SMOODEV-1186): auth + remote-org settings. The runtime, auth
+    // manager, and api client live here so the headless modules can be
+    // exercised before per-view UIs are wired up in phase 3+.
+    runtime: Option<Arc<tokio::runtime::Runtime>>,
+    auth: Option<auth::AuthManager>,
+    api: Option<api::ApiClient>,
+    settings: view::settings::SettingsState,
 }
 
 impl Default for App {
@@ -314,6 +321,10 @@ impl Default for App {
             column_widths: default_column_widths(),
             index_progress: None,
             db_conn: None,
+            runtime: None,
+            auth: None,
+            api: None,
+            settings: view::settings::SettingsState::default(),
         }
     }
 }
@@ -1472,8 +1483,22 @@ impl eframe::App for App {
                 ui.separator();
                 ui.toggle_value(&mut self.dark_mode, "🌙 Dark");
                 ui.separator();
+                if ui
+                    .toggle_value(&mut self.settings.open, "⚙ Settings")
+                    .changed()
+                {
+                    ctx.request_repaint();
+                }
+                ui.separator();
             });
         });
+
+        // Settings panel (phase 2 — SMOODEV-1186). Renders as a floating window
+        // when toggled on. Returns `true` when the org registry changed; we
+        // persist on the next eframe save_state call automatically.
+        if let (Some(auth), Some(rt)) = (self.auth.as_ref(), self.runtime.as_ref()) {
+            let _changed = self.settings.ui(ctx, auth, rt.handle());
+        }
 
         egui::SidePanel::left("filters").resizable(true).default_width(330.0).show(ctx, |ui| {
             ui.heading("Filters");
@@ -2203,6 +2228,38 @@ fn main() -> Result<()> {
         viewport,
         ..Default::default()
     };
-    eframe::run_native("Smoo AI Log Viewer", native_options, Box::new(|_cc| Ok(Box::new(App::default())))).map_err(|err| anyhow!(err.to_string()))?;
+
+    // Spin up a multi-thread tokio runtime for background HTTP work — auth
+    // token refresh, remote API calls, future streaming. Constructed once and
+    // shared by every Source that needs async I/O. Held inside the App so it
+    // outlives the eframe loop.
+    let runtime = Arc::new(
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .thread_name("smooobs-net")
+            .build()
+            .map_err(|e| anyhow!("failed to start tokio runtime: {e}"))?,
+    );
+    let http = reqwest::Client::builder()
+        .user_agent(concat!("smooai-observability-viewer/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| anyhow!("failed to build reqwest client: {e}"))?;
+    let auth_mgr = auth::AuthManager::new(http.clone());
+    let api_client = api::ApiClient::new(http, auth_mgr.clone())
+        .map_err(|e| anyhow!("failed to build api client: {e}"))?;
+
+    let app_factory = {
+        let runtime = runtime.clone();
+        move |_cc: &eframe::CreationContext<'_>| -> std::result::Result<Box<dyn eframe::App>, Box<dyn std::error::Error + Send + Sync>> {
+            let mut app = App::default();
+            app.runtime = Some(runtime.clone());
+            app.auth = Some(auth_mgr.clone());
+            app.api = Some(api_client.clone());
+            Ok(Box::new(app))
+        }
+    };
+
+    eframe::run_native("Smoo AI Observability Studio", native_options, Box::new(app_factory))
+        .map_err(|err| anyhow!(err.to_string()))?;
     Ok(())
 }

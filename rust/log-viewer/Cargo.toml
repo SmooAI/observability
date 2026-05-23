@@ -45,6 +45,10 @@ thiserror = "2"
 version = "0.13"
 optional = true
 
+[dev-dependencies]
+wiremock = "0.6"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "test-util"] }
+
 [features]
 default = []
 simd = ["simd-json"]
