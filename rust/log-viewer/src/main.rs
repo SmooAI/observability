@@ -279,6 +279,18 @@ struct App {
     auth: Option<auth::AuthManager>,
     api: Option<api::ApiClient>,
     settings: view::settings::SettingsState,
+    // Phase 3 (SMOODEV-1187): which data source the user is currently viewing.
+    // `None` means the local `.smooai-logs/` view (the existing UI below).
+    // `Some(uuid)` means the remote logs view for that org.
+    active_source: ActiveSource,
+    remote_logs: std::collections::HashMap<uuid::Uuid, view::logs::RemoteLogsView>,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum ActiveSource {
+    #[default]
+    Local,
+    Remote(uuid::Uuid),
 }
 
 impl Default for App {
@@ -325,6 +337,8 @@ impl Default for App {
             auth: None,
             api: None,
             settings: view::settings::SettingsState::default(),
+            active_source: ActiveSource::default(),
+            remote_logs: std::collections::HashMap::new(),
         }
     }
 }
@@ -1491,6 +1505,28 @@ impl eframe::App for App {
                 }
                 ui.separator();
             });
+
+            // -- Source picker row (phase 3 — SMOODEV-1187). Lets the user
+            // switch between the local .smooai-logs/ source and any remote org
+            // configured under Settings.
+            ui.horizontal_wrapped(|ui| {
+                ui.label(RichText::new("Source:").small().color(Color32::from_gray(160)));
+                if ui
+                    .selectable_label(self.active_source == ActiveSource::Local, "💾 Local")
+                    .clicked()
+                {
+                    self.active_source = ActiveSource::Local;
+                    ctx.request_repaint();
+                }
+                for entry in &self.settings.registry.entries {
+                    let active = self.active_source == ActiveSource::Remote(entry.org_id);
+                    let label = format!("☁ {}", entry.label);
+                    if ui.selectable_label(active, label).clicked() {
+                        self.active_source = ActiveSource::Remote(entry.org_id);
+                        ctx.request_repaint();
+                    }
+                }
+            });
         });
 
         // Settings panel (phase 2 — SMOODEV-1186). Renders as a floating window
@@ -1498,6 +1534,23 @@ impl eframe::App for App {
         // persist on the next eframe save_state call automatically.
         if let (Some(auth), Some(rt)) = (self.auth.as_ref(), self.runtime.as_ref()) {
             let _changed = self.settings.ui(ctx, auth, rt.handle());
+        }
+
+        // -- Remote-source branch (phase 3). Renders the logs view in a
+        // CentralPanel and bypasses the local SidePanel + CentralPanel below.
+        if let ActiveSource::Remote(org_id) = self.active_source {
+            if let (Some(api), Some(rt)) = (self.api.clone(), self.runtime.as_ref()) {
+                let rt_handle = rt.handle().clone();
+                let view = self
+                    .remote_logs
+                    .entry(org_id)
+                    .or_insert_with(|| view::logs::RemoteLogsView::for_org(org_id));
+                egui::CentralPanel::default().show(ctx, |ui| {
+                    view.ui(ui, &api, &rt_handle);
+                });
+                return;
+            }
+            // Auth/runtime not yet initialised — fall through to local.
         }
 
         egui::SidePanel::left("filters").resizable(true).default_width(330.0).show(ctx, |ui| {
