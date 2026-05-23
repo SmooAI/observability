@@ -1,0 +1,12 @@
+[application]
+name = "smooai-observability-studio"
+default_platform = "desktop"
+
+[web.app]
+title = "SmooAI Observability Studio"
+
+[bundle]
+identifier = "ai.smoo.observability.studio"
+publisher = "Smoo AI"
+icon = ["assets/icons/icon.png"]
+category = "DeveloperTool"

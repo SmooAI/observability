@@ -1,0 +1,627 @@
+/*
+ * SmooAI Observability Studio — app-specific CSS layer.
+ *
+ * The brand foundation (OKLCH tokens, base .btn / .card / .modal__sheet /
+ * .brand-badge classes, monogram, reset/scrollbars) comes from `@smooai/ui`
+ * (`smooai_ui::STYLES`). This file ONLY contains observability-studio's own
+ * shell layout + view-specific components — never duplicates brand tokens.
+ *
+ * If you find yourself adding a `--color-…` here, add it to smooai-ui's
+ * shared/styles.css instead and ship a coordinated bump.
+ */
+
+/* App-level tokens that aren't shared yet — observability-studio's chrome
+ * needs a few extras (header height, wider rail). These are deliberately
+ * separate from brand tokens so a future bump of smooai-ui can't silently
+ * change their semantics. */
+:root {
+    --rail-width: 240px;
+    --status-bar-height: 36px;
+    --header-height: 64px;
+
+    /* App-only fills, derived from brand surface colours so they harmonise
+     * but stay locally tuneable. */
+    --surface: oklch(0.205 0.015 265);
+    --surface-elevated: oklch(0.235 0.018 265);
+    --foreground-muted: oklch(0.75 0.02 260);
+    --foreground-subtle: oklch(0.55 0.02 260);
+    --border-strong: oklch(0.3 0.008 260 / 1.0);
+    --accent-soft: oklch(0.657 0.112 194.8 / 0.18);
+    --destructive: oklch(0.712 0.181 22.4);
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+}
+
+button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+
+input {
+    font: inherit;
+    color: inherit;
+}
+
+/* ===========================================================
+ *  Shell — top-level layout
+ * =========================================================== */
+
+.shell {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background:
+        radial-gradient(circle at 0% 0%, oklch(70% 0.13 195 / 0.05), transparent 35%),
+        radial-gradient(circle at 100% 100%, oklch(72% 0.11 230 / 0.04), transparent 40%),
+        var(--background);
+}
+
+.shell__body {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.shell__main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background:
+        linear-gradient(180deg, oklch(70% 0.13 195 / 0.02), transparent 8%),
+        transparent;
+}
+
+/* ===========================================================
+ *  Nav rail
+ * =========================================================== */
+
+.rail {
+    width: var(--rail-width);
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    padding: var(--space-4);
+    background:
+        linear-gradient(180deg, oklch(70% 0.13 195 / 0.04), transparent 35%),
+        oklch(13% 0.04 260 / 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border-right: 1px solid var(--border);
+}
+
+.rail__brand {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-1);
+    margin-bottom: var(--space-6);
+}
+
+.rail__brand-mark {
+    width: 30px;
+    height: 30px;
+    border-radius: var(--radius-md);
+    background:
+        linear-gradient(135deg, var(--smoo-green) 0%, var(--smoo-blue-700) 100%);
+    box-shadow:
+        0 6px 14px -6px oklch(13% 0.04 260),
+        inset 0 1px 0 oklch(97% 0.01 260 / 0.18);
+}
+
+.rail__brand-title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1;
+}
+
+.rail__brand-sub {
+    font-size: 11px;
+    color: var(--foreground-muted);
+    line-height: 1.25;
+    margin-top: 2px;
+}
+
+.rail__section {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-top: var(--space-4);
+}
+
+.rail__section-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--foreground-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    padding: 0 var(--space-2);
+    margin-bottom: var(--space-1);
+}
+
+.rail__item {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    color: var(--foreground-muted);
+    font-size: 13px;
+    font-weight: 500;
+    transition: background-color 120ms ease, color 120ms ease;
+}
+
+.rail__item:hover {
+    background: oklch(89% 0.04 230 / 0.05);
+    color: var(--foreground);
+}
+
+.rail__item--active {
+    background: var(--accent-soft);
+    color: var(--foreground);
+}
+
+.rail__item--active::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    border-radius: 0 2px 2px 0;
+    background: var(--accent);
+}
+
+.rail__item-icon {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rail__item--active .rail__item-icon {
+    color: var(--accent);
+}
+
+.rail__item-label {
+    flex: 1;
+    text-align: left;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.rail__spacer {
+    flex: 1;
+}
+
+/* ===========================================================
+ *  Status bar
+ * =========================================================== */
+
+.status-bar {
+    height: var(--status-bar-height);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-4);
+    background: oklch(9% 0.03 260);
+    border-top: 1px solid var(--border);
+    color: var(--foreground-muted);
+    font-size: 11px;
+}
+
+.status-bar__dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--smoo-green);
+    box-shadow: 0 0 12px var(--smoo-green);
+}
+
+.status-bar__api {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--foreground-muted);
+}
+
+.status-bar__sep {
+    width: 1px;
+    height: 12px;
+    background: var(--border);
+}
+
+.status-bar__source {
+    font-weight: 500;
+    color: var(--foreground);
+}
+
+.status-bar__version {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    opacity: 0.5;
+}
+
+/* ===========================================================
+ *  Welcome screen
+ * =========================================================== */
+
+.welcome {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-8);
+}
+
+.welcome__card {
+    max-width: 460px;
+    padding: var(--space-8);
+    border-radius: var(--radius-xl);
+    background:
+        radial-gradient(circle at top, oklch(70% 0.13 195 / 0.06), transparent 55%),
+        var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: 0 12px 40px -16px oklch(0% 0 0 / 0.5);
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-5);
+}
+
+.welcome__icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--smoo-green) 0%, var(--smoo-blue-700) 100%);
+    color: white;
+    box-shadow:
+        0 10px 30px -10px oklch(70% 0.13 195 / 0.6),
+        inset 0 1px 0 oklch(97% 0.01 260 / 0.25);
+}
+
+.welcome__title {
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.welcome__body {
+    font-size: 14px;
+    color: var(--foreground-muted);
+    line-height: 1.6;
+}
+
+/* ===========================================================
+ *  View header
+ * =========================================================== */
+
+.view-header {
+    height: var(--header-height);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: 0 var(--space-6);
+    border-bottom: 1px solid var(--border);
+    background: oklch(13% 0.04 260 / 0.6);
+}
+
+.view-header__icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    background:
+        linear-gradient(135deg, oklch(70% 0.13 195 / 0.25), oklch(43% 0.09 240 / 0.18));
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.view-header__title-block {
+    display: flex;
+    flex-direction: column;
+}
+
+.view-header__title {
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.view-header__sub {
+    font-size: 12px;
+    color: var(--foreground-muted);
+}
+
+.view-header__actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.view-body {
+    flex: 1;
+    overflow: auto;
+    padding: var(--space-6);
+}
+
+.view-stub {
+    color: var(--foreground-subtle);
+    font-size: 13px;
+    max-width: 540px;
+    margin: 0 auto;
+    text-align: center;
+    padding: var(--space-8) var(--space-6);
+}
+
+/*
+ * The .btn family (.btn, .btn--primary, .btn--ghost, .btn--outline,
+ * .btn--icon, .btn--lg) is owned by `@smooai/ui` and shipped via
+ * `smooai_ui::STYLES`. Do not redefine them here.
+ */
+
+/* ===========================================================
+ *  Dialog (settings + add org)
+ * =========================================================== */
+
+.dialog__backdrop {
+    position: fixed;
+    inset: 0;
+    background: oklch(0% 0 0 / 0.55);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-6);
+}
+
+.dialog {
+    width: 100%;
+    max-width: 580px;
+    max-height: calc(100vh - var(--space-8));
+    overflow: auto;
+    background:
+        radial-gradient(circle at top left, oklch(70% 0.13 195 / 0.06), transparent 55%),
+        var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
+    box-shadow: 0 30px 80px -20px oklch(0% 0 0 / 0.7);
+}
+
+.dialog__header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    gap: var(--space-4);
+}
+
+.dialog__title {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+.dialog__desc {
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--foreground-muted);
+    line-height: 1.5;
+}
+
+.dialog__close {
+    color: var(--foreground-muted);
+    padding: 4px;
+    border-radius: var(--radius-sm);
+}
+
+.dialog__close:hover {
+    color: var(--foreground);
+    background: oklch(89% 0.04 230 / 0.06);
+}
+
+.dialog__section {
+    margin-top: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.dialog__section-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--foreground);
+}
+
+.dialog__divider {
+    height: 1px;
+    background: var(--border);
+    margin: var(--space-5) 0;
+}
+
+/* ===========================================================
+ *  Org row + form
+ * =========================================================== */
+
+.org-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: oklch(13% 0.04 260 / 0.6);
+}
+
+.org-row__main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.org-row__label {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.org-row__meta {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--foreground-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.org-row__cid {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--foreground-muted);
+}
+
+.empty {
+    font-size: 13px;
+    color: var(--foreground-subtle);
+    font-style: italic;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.form__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.field--full {
+    grid-column: span 2;
+}
+
+.field__label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    color: var(--foreground-subtle);
+}
+
+.field__input {
+    height: 36px;
+    padding: 0 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    background: oklch(13% 0.04 260 / 0.6);
+    color: var(--foreground);
+    font-size: 13px;
+    transition:
+        border-color 120ms ease,
+        background-color 120ms ease;
+}
+
+.field__input::placeholder {
+    color: var(--foreground-subtle);
+}
+
+.field__input:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: oklch(13% 0.04 260 / 0.9);
+}
+
+.field__input--mono {
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.form__error {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    background: oklch(70% 0.18 25 / 0.10);
+    border: 1px solid oklch(70% 0.18 25 / 0.35);
+    color: var(--destructive);
+    font-size: 12px;
+}
+
+.form__actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* ===========================================================
+ *  Inline SVG icons
+ * =========================================================== */
+
+.icon {
+    width: 1em;
+    height: 1em;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* ===========================================================
+ *  Spinner
+ * =========================================================== */
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 2px solid oklch(89% 0.04 230 / 0.2);
+    border-top-color: var(--accent);
+    animation: spin 700ms linear infinite;
+}
