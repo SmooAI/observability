@@ -23,7 +23,7 @@ Built on `eframe` + `egui`. Single signed binary on macOS, Windows, Linux.
 | 8     | Traces view (blocked on SMOODEV-1161)                       | Planned             |
 | 9     | LLM/gen-AI view (blocked on SMOODEV-1160)                   | Planned             |
 
-The full plan lives at [`docs/Engineering/Rust-Desktop-Observability-Viewer.md`](https://github.com/SmooAI/smooai/blob/main/docs/Engineering/Rust-Desktop-Observability-Viewer.md) inside the smooai monorepo. Decision rationale: [ADR-012](https://github.com/SmooAI/smooai/blob/main/docs/Decisions/ADR-012-Native-Desktop-Observability-Viewer.md).
+The full plan lives at [`docs/Engineering/Rust-Desktop-Observability-Viewer.md`](https://github.com/SmooAI/smooai/blob/main/docs/Engineering/Rust-Desktop-Observability-Viewer.md) inside the smooai monorepo. Decision rationale: [ADR-013](https://github.com/SmooAI/smooai/blob/main/docs/Decisions/ADR-013-Native-Desktop-Observability-Viewer.md).
 
 ---
 
