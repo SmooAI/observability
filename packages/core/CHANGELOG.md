@@ -1,5 +1,11 @@
 # @smooai/observability
 
+## 0.10.1
+
+### Patch Changes
+
+- 170b137: fix(node): re-export `setGenAIAttributes` / `recordGenAIMessage` / GenAI types from node entry — were missing in 0.10.0, broke backend builds importing the helpers from the bare package name
+
 ## 0.10.0
 
 ### Minor Changes
