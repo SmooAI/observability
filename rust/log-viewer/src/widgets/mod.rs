@@ -3,6 +3,7 @@
 
 #![allow(dead_code)]
 
+pub mod heatmap;
 pub mod kpi_card;
 pub mod stack_frame;
 pub mod time_range;

@@ -6,4 +6,5 @@
 
 pub mod errors;
 pub mod logs;
+pub mod metrics;
 pub mod settings;
