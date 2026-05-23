@@ -91,28 +91,29 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
     if (installed) return installed;
 
     const traceEndpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-    const metricEndpoint =
-        options.otlpMetricsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    const metricEndpoint = options.otlpMetricsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
     // SMOODEV-1206: when a TokenProvider is passed, route through the
     // auth-injecting exporters. They ask the TokenProvider for a fresh
     // access_token on EVERY export call — no header snapshot, no expiry
     // drift. Otherwise fall through to the upstream OTLP exporters with
     // the caller's static otlpHeaders (legacy path).
-    const traceExporter = options.tokenProvider && traceEndpoint
-        ? new AuthInjectingTraceExporter({ url: traceEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
-        : traceEndpoint
-          ? new OTLPTraceExporter({ url: traceEndpoint, headers: options.otlpHeaders })
-          : new OTLPTraceExporter({ headers: options.otlpHeaders });
+    const traceExporter =
+        options.tokenProvider && traceEndpoint
+            ? new AuthInjectingTraceExporter({ url: traceEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
+            : traceEndpoint
+              ? new OTLPTraceExporter({ url: traceEndpoint, headers: options.otlpHeaders })
+              : new OTLPTraceExporter({ headers: options.otlpHeaders });
 
     // Metrics MeterProvider — same OTLP/HTTP transport, separate exporter.
     // PeriodicExportingMetricReader batches per-aggregation-period (default
     // 60s; Lambda containers may live shorter so a 30s window catches more).
-    const metricExporter = options.tokenProvider && metricEndpoint
-        ? new AuthInjectingMetricExporter({ url: metricEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
-        : metricEndpoint
-          ? new OTLPMetricExporter({ url: metricEndpoint, headers: options.otlpHeaders })
-          : new OTLPMetricExporter({ headers: options.otlpHeaders });
+    const metricExporter =
+        options.tokenProvider && metricEndpoint
+            ? new AuthInjectingMetricExporter({ url: metricEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
+            : metricEndpoint
+              ? new OTLPMetricExporter({ url: metricEndpoint, headers: options.otlpHeaders })
+              : new OTLPMetricExporter({ headers: options.otlpHeaders });
     // sdk-node and sdk-metrics ship slightly different versions of the
     // MetricReader class (private-property nominal-typing mismatch). Cast
     // through `unknown` — runtime contract is identical.

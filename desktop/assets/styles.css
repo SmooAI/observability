@@ -25,12 +25,13 @@
     --surface-elevated: oklch(0.235 0.018 265);
     --foreground-muted: oklch(0.75 0.02 260);
     --foreground-subtle: oklch(0.55 0.02 260);
-    --border-strong: oklch(0.3 0.008 260 / 1.0);
+    --border-strong: oklch(0.3 0.008 260 / 1);
     --accent-soft: oklch(0.657 0.112 194.8 / 0.18);
     --destructive: oklch(0.712 0.181 22.4);
 }
 
-html, body {
+html,
+body {
     height: 100%;
     overflow: hidden;
     background: var(--background);
@@ -67,8 +68,7 @@ input {
     width: 100vw;
     background:
         radial-gradient(circle at 0% 0%, oklch(70% 0.13 195 / 0.05), transparent 35%),
-        radial-gradient(circle at 100% 100%, oklch(72% 0.11 230 / 0.04), transparent 40%),
-        var(--background);
+        radial-gradient(circle at 100% 100%, oklch(72% 0.11 230 / 0.04), transparent 40%), var(--background);
 }
 
 .shell__body {
@@ -82,9 +82,7 @@ input {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background:
-        linear-gradient(180deg, oklch(70% 0.13 195 / 0.02), transparent 8%),
-        transparent;
+    background: linear-gradient(180deg, oklch(70% 0.13 195 / 0.02), transparent 8%), transparent;
 }
 
 /* ===========================================================
@@ -97,9 +95,7 @@ input {
     display: flex;
     flex-direction: column;
     padding: var(--space-4);
-    background:
-        linear-gradient(180deg, oklch(70% 0.13 195 / 0.04), transparent 35%),
-        oklch(13% 0.04 260 / 0.85);
+    background: linear-gradient(180deg, oklch(70% 0.13 195 / 0.04), transparent 35%), oklch(13% 0.04 260 / 0.85);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     border-right: 1px solid var(--border);
@@ -117,8 +113,7 @@ input {
     width: 30px;
     height: 30px;
     border-radius: var(--radius-md);
-    background:
-        linear-gradient(135deg, var(--smoo-green) 0%, var(--smoo-blue-700) 100%);
+    background: linear-gradient(135deg, var(--smoo-green) 0%, var(--smoo-blue-700) 100%);
     box-shadow:
         0 6px 14px -6px oklch(13% 0.04 260),
         inset 0 1px 0 oklch(97% 0.01 260 / 0.18);
@@ -165,7 +160,9 @@ input {
     color: var(--foreground-muted);
     font-size: 13px;
     font-weight: 500;
-    transition: background-color 120ms ease, color 120ms ease;
+    transition:
+        background-color 120ms ease,
+        color 120ms ease;
 }
 
 .rail__item:hover {
@@ -179,7 +176,7 @@ input {
 }
 
 .rail__item--active::before {
-    content: "";
+    content: '';
     position: absolute;
     left: 0;
     top: 50%;
@@ -281,9 +278,7 @@ input {
     max-width: 460px;
     padding: var(--space-8);
     border-radius: var(--radius-xl);
-    background:
-        radial-gradient(circle at top, oklch(70% 0.13 195 / 0.06), transparent 55%),
-        var(--surface);
+    background: radial-gradient(circle at top, oklch(70% 0.13 195 / 0.06), transparent 55%), var(--surface);
     border: 1px solid var(--border);
     box-shadow: 0 12px 40px -16px oklch(0% 0 0 / 0.5);
     text-align: center;
@@ -338,8 +333,7 @@ input {
     width: 36px;
     height: 36px;
     border-radius: var(--radius-md);
-    background:
-        linear-gradient(135deg, oklch(70% 0.13 195 / 0.25), oklch(43% 0.09 240 / 0.18));
+    background: linear-gradient(135deg, oklch(70% 0.13 195 / 0.25), oklch(43% 0.09 240 / 0.18));
     color: var(--accent);
     display: flex;
     align-items: center;
@@ -412,9 +406,7 @@ input {
     max-width: 580px;
     max-height: calc(100vh - var(--space-8));
     overflow: auto;
-    background:
-        radial-gradient(circle at top left, oklch(70% 0.13 195 / 0.06), transparent 55%),
-        var(--surface);
+    background: radial-gradient(circle at top left, oklch(70% 0.13 195 / 0.06), transparent 55%), var(--surface);
     border: 1px solid var(--border-strong);
     border-radius: var(--radius-xl);
     padding: var(--space-6);
@@ -584,7 +576,7 @@ input {
     gap: 8px;
     padding: 10px 12px;
     border-radius: var(--radius-md);
-    background: oklch(70% 0.18 25 / 0.10);
+    background: oklch(70% 0.18 25 / 0.1);
     border: 1px solid oklch(70% 0.18 25 / 0.35);
     color: var(--destructive);
     font-size: 12px;
@@ -614,7 +606,9 @@ input {
  * =========================================================== */
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .spinner {
