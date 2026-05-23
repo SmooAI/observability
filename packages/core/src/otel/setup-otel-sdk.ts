@@ -17,6 +17,8 @@ import { Resource } from '@opentelemetry/resources';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
+import type { TokenProvider } from '../auth/token-provider';
+import { AuthInjectingMetricExporter, AuthInjectingTraceExporter } from './auth-injecting-exporter';
 
 export interface SetupOtelOptions {
     /** Service name surfaced in spans (e.g. 'smoo-backend', 'smoo-web'). */
@@ -51,6 +53,22 @@ export interface SetupOtelOptions {
      * before the container freezes.
      */
     metricExportIntervalMs?: number;
+    /**
+     * SMOODEV-1206: when set, traces + metrics export via the
+     * `AuthInjectingTraceExporter` / `AuthInjectingMetricExporter` which
+     * pull a fresh Bearer from this provider on every request. Sidesteps
+     * the OTel JS v0.55 header-snapshot bug that caused exports to 401
+     * forever after the first token expired. When unset, falls back to
+     * the standard OTLPTraceExporter + static `otlpHeaders` (existing
+     * behavior for callers that pre-mint their own token).
+     */
+    tokenProvider?: TokenProvider;
+    /**
+     * Endpoint for metrics, if you want it different from the trace
+     * endpoint base. Defaults to `${otlpEndpoint base}/v1/metrics` derived
+     * from the trace URL or env vars.
+     */
+    otlpMetricsEndpoint?: string;
 }
 
 export interface OtelSdkHandle {
@@ -73,18 +91,28 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
     if (installed) return installed;
 
     const traceEndpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
-    const metricEndpoint = process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    const metricEndpoint =
+        options.otlpMetricsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
-    const traceExporter = traceEndpoint
-        ? new OTLPTraceExporter({ url: traceEndpoint, headers: options.otlpHeaders })
-        : new OTLPTraceExporter({ headers: options.otlpHeaders });
+    // SMOODEV-1206: when a TokenProvider is passed, route through the
+    // auth-injecting exporters. They ask the TokenProvider for a fresh
+    // access_token on EVERY export call — no header snapshot, no expiry
+    // drift. Otherwise fall through to the upstream OTLP exporters with
+    // the caller's static otlpHeaders (legacy path).
+    const traceExporter = options.tokenProvider && traceEndpoint
+        ? new AuthInjectingTraceExporter({ url: traceEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
+        : traceEndpoint
+          ? new OTLPTraceExporter({ url: traceEndpoint, headers: options.otlpHeaders })
+          : new OTLPTraceExporter({ headers: options.otlpHeaders });
 
     // Metrics MeterProvider — same OTLP/HTTP transport, separate exporter.
     // PeriodicExportingMetricReader batches per-aggregation-period (default
     // 60s; Lambda containers may live shorter so a 30s window catches more).
-    const metricExporter = metricEndpoint
-        ? new OTLPMetricExporter({ url: metricEndpoint, headers: options.otlpHeaders })
-        : new OTLPMetricExporter({ headers: options.otlpHeaders });
+    const metricExporter = options.tokenProvider && metricEndpoint
+        ? new AuthInjectingMetricExporter({ url: metricEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
+        : metricEndpoint
+          ? new OTLPMetricExporter({ url: metricEndpoint, headers: options.otlpHeaders })
+          : new OTLPMetricExporter({ headers: options.otlpHeaders });
     // sdk-node and sdk-metrics ship slightly different versions of the
     // MetricReader class (private-property nominal-typing mismatch). Cast
     // through `unknown` — runtime contract is identical.
