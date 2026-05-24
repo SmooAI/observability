@@ -7,7 +7,8 @@
 //! - `GET  /health/liveness`             — process alive
 //! - `GET  /health/readiness`            — pool + redis reachable
 //! - `GET  /v1/profile`                  — Supabase-JWT-authenticated profile read
-//! - `POST /v1/auth/sign-in`             — stub (501), see `handlers::auth`
+//! - `POST /v1/auth/sign-in`             — Supabase password grant passthrough (rate-limited per IP)
+//! - `POST /v1/auth/refresh`             — Supabase refresh-token grant passthrough
 
 use std::net::SocketAddr;
 
@@ -54,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health/readiness", get(handlers::health::readiness))
         .route("/v1/profile", get(handlers::profile::get_profile))
         .route("/v1/auth/sign-in", post(handlers::auth::sign_in))
+        .route("/v1/auth/refresh", post(handlers::auth::refresh))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(state);
@@ -61,7 +63,7 @@ async fn main() -> anyhow::Result<()> {
     let addr: SocketAddr = format!("0.0.0.0:{}", config.port).parse()?;
     let listener = tokio::net::TcpListener::bind(addr).await?;
     tracing::info!("listening on {}", addr);
-    axum::serve(listener, app.into_make_service()).await?;
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await?;
     Ok(())
 }
 
