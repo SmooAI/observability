@@ -10,6 +10,7 @@ pub mod auth;
 pub mod cache;
 pub mod controller;
 pub mod db;
+pub mod edge;
 pub mod error;
 pub mod handlers;
 pub mod state;

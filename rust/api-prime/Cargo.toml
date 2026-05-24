@@ -39,13 +39,46 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 
 # Cache
-redis = { version = "0.27", default-features = false, features = ["tokio-comp", "aio"] }
+redis = { version = "0.27", default-features = false, features = ["tokio-comp", "aio", "script"] }
 
 # Auth (JWT + JWKS)
 jsonwebtoken = "9"
 
 # Outbound HTTP (JWKS refresh + Supabase Auth REST)
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+# AWS SDK (data-plane proxy mode — direct Lambda invoke, bypassing API Gateway).
+# Controller also uses aws-sdk-s3 to read SST stack outputs JSON.
+aws-config = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
+aws-sdk-lambda = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
+
+# In-process LRU cache (L1, best-effort, per-pod).
+moka = { version = "0.12", features = ["future"] }
+
+# Concurrent map (route table cache, tag → keys index).
+dashmap = "6"
+
+# HMAC + SHA-2 for edge attestation signing + controller cache-invalidation
+# signature verification.
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+subtle = "2"
+
+# Static perfect hash map for implement-mode handler dispatch.
+phf = { version = "0.11", features = ["macros"] }
+
+# Async helpers
+async-trait = "0.1"
+futures = "0.3"
+
+# URL encoding (admin route ids)
+urlencoding = "2"
+
+# Path matching (URL templates → :param extraction).
+regex = "1"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -55,28 +88,12 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
-# HMAC + SHA-2 for internal cache-invalidation signature verification.
-hmac = "0.12"
-sha2 = "0.10"
-subtle = "2"
-hex = "0.4"
-
-# AWS SDK for fetching SST stack outputs from S3 (controller only).
-aws-config = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
-
-# Async + stream helpers.
-async-trait = "0.1"
-futures = "0.3"
-
-# URL encoding for admin route ids.
-urlencoding = "2"
-
 # Misc
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
 anyhow = "1"
 thiserror = "1"
+once_cell = "1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }

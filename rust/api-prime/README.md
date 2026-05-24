@@ -132,13 +132,87 @@ exposes port 3000.
 - **Performance design target**: p99 < 20ms warm for `/v1/profile`. Not
   benched yet; will be measured by the Phase 6 shadow harness.
 
+## Edge pipeline (SMOODEV-1276 + SMOODEV-1278)
+
+The data-plane binary now runs a programmable edge pipeline per
+ADR-017. Single catch-all axum route → `src/edge/dispatcher.rs`:
+
+```
+request → routes.lookup → auth.verify → ratelimit.check →
+    schema.validate_request → dispatch(proxy | cache | implement)
+```
+
+Modules under `src/edge/`:
+
+| Module          | Owns                                                                  |
+| --------------- | --------------------------------------------------------------------- |
+| `route_table`   | `apr:route:*` reader + RCU swap on `apr:config-bump`                  |
+| `auth`          | JWT (user) + M2M token verification, produces `EdgeAuthContext`       |
+| `ratelimit`     | Valkey sliding-window per `<sub>:<route_hash>`                        |
+| `cache`         | moka L1 + Valkey L2 with stale-while-revalidate                       |
+| `pubsub`        | subscriber for `apr:config-bump` + `apr:invalidate`                   |
+| `proxy`         | direct Lambda invoke (no API Gateway hop, ADR-017 pivot)              |
+| `edge_attest`   | HMAC-signed attestation embedded in `requestContext.authorizer.smooEdge` |
+| `implement`     | static dispatch to in-process Rust handlers                           |
+| `schema`        | v1 stub — real validator lands in SMOODEV-1277                        |
+| `debug`         | dev-only response headers (`X-Smoo-Cache-Status`, etc.)               |
+
+### Required env vars (data plane)
+
+| Name                       | Default          | Purpose                                       |
+| -------------------------- | ---------------- | --------------------------------------------- |
+| `DATABASE_URL`             | (required)       | Postgres pool for implement-mode handlers     |
+| `REDIS_URL`                | `redis://...`    | Valkey for route table + cache + rate limit  |
+| `SUPABASE_URL`             | (required)       | JWKS base URL                                 |
+| `SUPABASE_ANON_KEY`        | (required)       | Auth-passthrough endpoints                    |
+| `SUPABASE_JWKS_URL`        | derived          | Override JWKS endpoint                        |
+| `EDGE_ATTEST_SECRET`       | (required)       | HMAC secret for trust-boundary attestation    |
+| `CACHE_L1_MAX_ENTRIES`     | `10000`          | moka capacity                                 |
+| `SHUTDOWN_TIMEOUT_SECS`    | `25`             | Graceful drain budget on SIGTERM              |
+| `PORT`                     | `8080`           | HTTP listen port                              |
+| `IS_LOCAL`                 | unset            | When `true`, always emit debug response headers |
+| `LOCAL_MANIFEST_PATH`      | unset            | Load route table from this JSON file instead of Valkey |
+
+### Local dev — direct Lambda invoke
+
+Proxy mode uses the default `aws-config` credential chain. In-cluster
+this resolves via IRSA on the `api-prime` ServiceAccount; locally,
+provide one of:
+
+- `AWS_PROFILE` — uses `~/.aws/credentials`
+- `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` (+ `AWS_SESSION_TOKEN`)
+
+Mount via the local-dev Kustomize overlay (`apps/k8s/api-prime/overlays/local/`).
+
+### LOCAL_MANIFEST_PATH
+
+Set `LOCAL_MANIFEST_PATH=/etc/api-prime/manifest.json` to skip the
+Valkey route table entirely. The file is polled every 5s for mtime
+changes and reloaded on diff. Useful for integration tests + local
+dev where running the full controller is overkill. File shape: either
+a top-level `[RouteEntry, ...]` array or `{"routes": [...]}`.
+
+### Debug response headers
+
+Emitted only when `IS_LOCAL=true` OR the request carries
+`X-Smoo-Cache-Debug: 1`. Headers:
+
+- `X-Smoo-Cache-Status` — `HIT | MISS | STALE | BYPASS`
+- `X-Smoo-Cache-Key` — first 8 hex chars of the SHA-256 cache key
+- `X-Smoo-Route-Mode` — `proxy | cache | implement`
+- `X-Smoo-Lambda-Arn` — ARN actually invoked (empty for implement / cache-HIT)
+
+In production these headers are never set.
+
 ## What's next
 
-1. Add the remaining `/v1/*` read endpoints listed in Phase 5c of the
-   plan: `/v1/organizations`, `/v1/organizations/:id/features`,
-   `/v1/organizations/:id/products`, and the batched `/me/bootstrap`.
-2. Wire EKS deployment manifests in the smooai monorepo at
+1. Wire EKS deployment manifests in the smooai monorepo at
    `apps/k8s/apps/api-prime/` and `apps/k8s/apps/api-prime-controller/`.
+   Manifest needs: `EDGE_ATTEST_SECRET` env (from `@smooai/config`
+   ExternalSecret), `IS_LOCAL` env in local overlay, `lambda:InvokeFunction`
+   in the api-prime IRSA role (wildcard `function:smooai-production-*`
+   for v1; per-route ARN tightening is a follow-up ticket).
+2. Schema validation (SMOODEV-1277) — replace `src/edge/schema.rs` stub.
 3. Hook into the shadow harness from Phase 6.
 4. Fill in the controller (Wave 3): reconcile loop, admin endpoints,
    internal cache invalidation, Lambda health probing, OpenAPI emission.
