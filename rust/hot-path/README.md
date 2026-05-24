@@ -10,13 +10,13 @@ agent fills in `POST /v1/auth/sign-in` and the remaining `/v1/*` reads.
 
 ## Endpoints
 
-| Method | Path                  | Status   | Notes                                                                |
-| ------ | --------------------- | -------- | -------------------------------------------------------------------- |
-| GET    | `/health/liveness`    | working  | process alive                                                        |
-| GET    | `/health/readiness`   | working  | pings Postgres + Redis                                               |
-| GET    | `/v1/profile`         | working  | port of `packages/backend/src/routes/profile.ts` (GET)               |
-| POST   | `/v1/auth/sign-in`    | working  | Supabase password-grant passthrough, rate-limited 10/60s per IP      |
-| POST   | `/v1/auth/refresh`    | working  | Supabase refresh-token-grant passthrough                             |
+| Method | Path                | Status  | Notes                                                           |
+| ------ | ------------------- | ------- | --------------------------------------------------------------- |
+| GET    | `/health/liveness`  | working | process alive                                                   |
+| GET    | `/health/readiness` | working | pings Postgres + Redis                                          |
+| GET    | `/v1/profile`       | working | port of `packages/backend/src/routes/profile.ts` (GET)          |
+| POST   | `/v1/auth/sign-in`  | working | Supabase password-grant passthrough, rate-limited 10/60s per IP |
+| POST   | `/v1/auth/refresh`  | working | Supabase refresh-token-grant passthrough                        |
 
 `GET /v1/profile` requires `Authorization: Bearer <supabase-jwt>`.
 
@@ -30,12 +30,12 @@ consumes `{access_token, refresh_token}` and hands them to
 
 Error mapping:
 
-| Upstream                 | Returned to caller                              |
-| ------------------------ | ----------------------------------------------- |
-| 200 OK                   | 200 with verbatim GoTrue body                   |
-| 400/401 invalid_grant    | 401 `{"message": "Invalid login credentials"}`  |
-| 429                      | 429 `{"message": "Too many sign-in attempts."}` |
-| 5xx / network error      | 502 `{"message": "Auth provider unavailable"}`  |
+| Upstream              | Returned to caller                              |
+| --------------------- | ----------------------------------------------- |
+| 200 OK                | 200 with verbatim GoTrue body                   |
+| 400/401 invalid_grant | 401 `{"message": "Invalid login credentials"}`  |
+| 429                   | 429 `{"message": "Too many sign-in attempts."}` |
+| 5xx / network error   | 502 `{"message": "Auth provider unavailable"}`  |
 
 Rate limit on `/v1/auth/sign-in` is per-IP (`X-Forwarded-For` left-most,
 falling back to the socket peer), 10 attempts per 60s, Redis-backed. The
@@ -53,15 +53,15 @@ point of having a hot-path service.
 
 ## Environment variables
 
-| Var                 | Required | Default                                              | Description                              |
-| ------------------- | -------- | ---------------------------------------------------- | ---------------------------------------- |
-| `DATABASE_URL`      | yes      | —                                                    | Postgres connection string               |
-| `SUPABASE_URL`      | yes      | —                                                    | e.g. `https://xrqbqgotghitcfuoukdk.supabase.co` |
-| `SUPABASE_ANON_KEY` | yes      | —                                                    | used by `/v1/auth/sign-in` + `/v1/auth/refresh` |
-| `SUPABASE_JWKS_URL` | no       | `${SUPABASE_URL}/auth/v1/.well-known/jwks.json`      | JWKS endpoint for JWT verification       |
-| `REDIS_URL`         | no       | `redis://127.0.0.1:6379`                             | Redis for read-through cache             |
-| `PORT`              | no       | `3000`                                               | HTTP listen port                         |
-| `RUST_LOG`          | no       | `info`                                               | tracing env filter                       |
+| Var                 | Required | Default                                         | Description                                     |
+| ------------------- | -------- | ----------------------------------------------- | ----------------------------------------------- |
+| `DATABASE_URL`      | yes      | —                                               | Postgres connection string                      |
+| `SUPABASE_URL`      | yes      | —                                               | e.g. `https://xrqbqgotghitcfuoukdk.supabase.co` |
+| `SUPABASE_ANON_KEY` | yes      | —                                               | used by `/v1/auth/sign-in` + `/v1/auth/refresh` |
+| `SUPABASE_JWKS_URL` | no       | `${SUPABASE_URL}/auth/v1/.well-known/jwks.json` | JWKS endpoint for JWT verification              |
+| `REDIS_URL`         | no       | `redis://127.0.0.1:6379`                        | Redis for read-through cache                    |
+| `PORT`              | no       | `3000`                                          | HTTP listen port                                |
+| `RUST_LOG`          | no       | `info`                                          | tracing env filter                              |
 
 ## Local development
 
