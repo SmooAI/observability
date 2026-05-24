@@ -144,34 +144,34 @@ request → routes.lookup → auth.verify → ratelimit.check →
 
 Modules under `src/edge/`:
 
-| Module          | Owns                                                                  |
-| --------------- | --------------------------------------------------------------------- |
-| `route_table`   | `apr:route:*` reader + RCU swap on `apr:config-bump`                  |
-| `auth`          | JWT (user) + M2M token verification, produces `EdgeAuthContext`       |
-| `ratelimit`     | Valkey sliding-window per `<sub>:<route_hash>`                        |
-| `cache`         | moka L1 + Valkey L2 with stale-while-revalidate                       |
-| `pubsub`        | subscriber for `apr:config-bump` + `apr:invalidate`                   |
-| `proxy`         | direct Lambda invoke (no API Gateway hop, ADR-017 pivot)              |
-| `edge_attest`   | HMAC-signed attestation embedded in `requestContext.authorizer.smooEdge` |
-| `implement`     | static dispatch to in-process Rust handlers                           |
-| `schema`        | v1 stub — real validator lands in SMOODEV-1277                        |
-| `debug`         | dev-only response headers (`X-Smoo-Cache-Status`, etc.)               |
+| Module        | Owns                                                                     |
+| ------------- | ------------------------------------------------------------------------ |
+| `route_table` | `apr:route:*` reader + RCU swap on `apr:config-bump`                     |
+| `auth`        | JWT (user) + M2M token verification, produces `EdgeAuthContext`          |
+| `ratelimit`   | Valkey sliding-window per `<sub>:<route_hash>`                           |
+| `cache`       | moka L1 + Valkey L2 with stale-while-revalidate                          |
+| `pubsub`      | subscriber for `apr:config-bump` + `apr:invalidate`                      |
+| `proxy`       | direct Lambda invoke (no API Gateway hop, ADR-017 pivot)                 |
+| `edge_attest` | HMAC-signed attestation embedded in `requestContext.authorizer.smooEdge` |
+| `implement`   | static dispatch to in-process Rust handlers                              |
+| `schema`      | v1 stub — real validator lands in SMOODEV-1277                           |
+| `debug`       | dev-only response headers (`X-Smoo-Cache-Status`, etc.)                  |
 
 ### Required env vars (data plane)
 
-| Name                       | Default          | Purpose                                       |
-| -------------------------- | ---------------- | --------------------------------------------- |
-| `DATABASE_URL`             | (required)       | Postgres pool for implement-mode handlers     |
-| `REDIS_URL`                | `redis://...`    | Valkey for route table + cache + rate limit  |
-| `SUPABASE_URL`             | (required)       | JWKS base URL                                 |
-| `SUPABASE_ANON_KEY`        | (required)       | Auth-passthrough endpoints                    |
-| `SUPABASE_JWKS_URL`        | derived          | Override JWKS endpoint                        |
-| `EDGE_ATTEST_SECRET`       | (required)       | HMAC secret for trust-boundary attestation    |
-| `CACHE_L1_MAX_ENTRIES`     | `10000`          | moka capacity                                 |
-| `SHUTDOWN_TIMEOUT_SECS`    | `25`             | Graceful drain budget on SIGTERM              |
-| `PORT`                     | `8080`           | HTTP listen port                              |
-| `IS_LOCAL`                 | unset            | When `true`, always emit debug response headers |
-| `LOCAL_MANIFEST_PATH`      | unset            | Load route table from this JSON file instead of Valkey |
+| Name                    | Default       | Purpose                                                |
+| ----------------------- | ------------- | ------------------------------------------------------ |
+| `DATABASE_URL`          | (required)    | Postgres pool for implement-mode handlers              |
+| `REDIS_URL`             | `redis://...` | Valkey for route table + cache + rate limit            |
+| `SUPABASE_URL`          | (required)    | JWKS base URL                                          |
+| `SUPABASE_ANON_KEY`     | (required)    | Auth-passthrough endpoints                             |
+| `SUPABASE_JWKS_URL`     | derived       | Override JWKS endpoint                                 |
+| `EDGE_ATTEST_SECRET`    | (required)    | HMAC secret for trust-boundary attestation             |
+| `CACHE_L1_MAX_ENTRIES`  | `10000`       | moka capacity                                          |
+| `SHUTDOWN_TIMEOUT_SECS` | `25`          | Graceful drain budget on SIGTERM                       |
+| `PORT`                  | `8080`        | HTTP listen port                                       |
+| `IS_LOCAL`              | unset         | When `true`, always emit debug response headers        |
+| `LOCAL_MANIFEST_PATH`   | unset         | Load route table from this JSON file instead of Valkey |
 
 ### Local dev — direct Lambda invoke
 

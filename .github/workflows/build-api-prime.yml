@@ -48,7 +48,7 @@ env:
 jobs:
     build-and-push:
         name: Build + push ${{ matrix.binary }} (linux/arm64)
-        runs-on: ubuntu-latest  # SMOODEV-1262: fallback while smoo-hub CI runner is offline
+        runs-on: ubuntu-latest # SMOODEV-1262: fallback while smoo-hub CI runner is offline
         timeout-minutes: 45
 
         strategy:
