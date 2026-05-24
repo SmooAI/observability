@@ -55,6 +55,23 @@ serde_json = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
+# HMAC + SHA-2 for internal cache-invalidation signature verification.
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2"
+hex = "0.4"
+
+# AWS SDK for fetching SST stack outputs from S3 (controller only).
+aws-config = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["rustls", "rt-tokio", "behavior-version-latest"] }
+
+# Async + stream helpers.
+async-trait = "0.1"
+futures = "0.3"
+
+# URL encoding for admin route ids.
+urlencoding = "2"
+
 # Misc
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", default-features = false, features = ["serde", "clock"] }
