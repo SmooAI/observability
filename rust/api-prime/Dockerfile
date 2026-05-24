@@ -21,7 +21,7 @@
 #     -f rust/api-prime/Dockerfile \
 #     rust/
 
-ARG RUST_VERSION=1.90
+ARG RUST_VERSION=1.91
 ARG BINARY=api-prime
 
 ############################
