@@ -1,5 +1,7 @@
 [workspace]
-members = ["observability", "api-prime"]
+# SMOODEV-1292: api-prime moved to SmooAI/smooai monorepo (rust/api-prime/).
+# Only the observability log viewer crate remains here.
+members = ["observability"]
 resolver = "2"
 
 [profile.release]
