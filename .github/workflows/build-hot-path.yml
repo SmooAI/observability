@@ -41,7 +41,7 @@ env:
 jobs:
     build-and-push:
         name: Build + push (linux/arm64)
-        runs-on: [self-hosted, mac-mini-linux, ci]
+        runs-on: ubuntu-latest  # SMOODEV-1262: fallback while smoo-hub CI runner is offline
         timeout-minutes: 45
 
         steps:
