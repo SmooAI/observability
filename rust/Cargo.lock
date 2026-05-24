@@ -1845,7 +1845,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "smooai-hot-path"
+name = "smooai-api-prime"
 version = "0.1.0"
 dependencies = [
  "anyhow",

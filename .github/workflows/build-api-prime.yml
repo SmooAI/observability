@@ -1,33 +1,41 @@
-name: Build hot-path image
+name: Build api-prime images
 
-# SMOODEV-1246: Build + push the smooai-hot-path container to GHCR.
+# SMOODEV-1272: Build + push the api-prime data-plane AND
+# api-prime-controller control-plane container images to GHCR.
+#
+# Renamed from build-hot-path.yml. The two binaries share a Dockerfile
+# (selected via `--build-arg BINARY=`) and a workspace, but ship as
+# separate images so they can be versioned + rolled independently:
+#
+#   ghcr.io/smooai/api-prime              (data plane)
+#   ghcr.io/smooai/api-prime-controller   (control plane)
 #
 # Triggers:
-#   * push to main touching `rust/hot-path/**`, the surrounding workspace
-#     `rust/Cargo.toml`, or this workflow itself → build, tag, push
+#   * push to main touching `rust/api-prime/**`, the surrounding workspace
+#     `rust/Cargo.toml`, or this workflow itself → matrix build both images
 #   * `workflow_dispatch` → manual build (useful for emergency rebuilds)
 #
-# Tagging strategy:
+# Tagging strategy (per image):
 #   * `:main-<sha>`   — primary mutable tag the ArgoCD Image Updater watches
 #   * `:<sha>`        — immutable per-commit tag (debug rollbacks)
 #   * `:latest`       — convenience tag for local `docker pull`
 #
 # Build context note:
-#   `rust/hot-path/Dockerfile` requires the *workspace root* (`rust/`) as the
-#   build context — the multi-crate workspace shares one Cargo.lock. We pass
-#   `context: ./rust` + `file: ./rust/hot-path/Dockerfile` to docker/build-push.
+#   `rust/api-prime/Dockerfile` requires the *workspace root* (`rust/`) as
+#   the build context. We pass `context: ./rust` + `file:
+#   ./rust/api-prime/Dockerfile` to docker/build-push.
 #
 # Runner:
-#   Self-hosted smoo-hub Linux VM (mac-mini-linux) per the repo convention for
-#   any heavy build. Linux/arm64 single-arch matches the EKS Graviton node pool.
+#   `ubuntu-latest` per SMOODEV-1262 — fallback while the smoo-hub CI
+#   runner is offline (smooai#1065 / smoo-obs#41).
 on:
     push:
         branches: [main]
         paths:
-            - 'rust/hot-path/**'
+            - 'rust/api-prime/**'
             - 'rust/Cargo.toml'
             - 'rust/Cargo.lock'
-            - '.github/workflows/build-hot-path.yml'
+            - '.github/workflows/build-api-prime.yml'
     workflow_dispatch:
 
 permissions:
@@ -36,13 +44,17 @@ permissions:
 
 env:
     REGISTRY: ghcr.io
-    IMAGE_NAME: smooai/hot-path
 
 jobs:
     build-and-push:
-        name: Build + push (linux/arm64)
+        name: Build + push ${{ matrix.binary }} (linux/arm64)
         runs-on: ubuntu-latest  # SMOODEV-1262: fallback while smoo-hub CI runner is offline
         timeout-minutes: 45
+
+        strategy:
+            fail-fast: false
+            matrix:
+                binary: [api-prime, api-prime-controller]
 
         steps:
             - name: Checkout
@@ -62,7 +74,7 @@ jobs:
               id: meta
               uses: docker/metadata-action@v5
               with:
-                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  images: ${{ env.REGISTRY }}/smooai/${{ matrix.binary }}
                   tags: |
                       type=sha,format=short,prefix=
                       type=sha,format=short,prefix=main-,enable={{is_default_branch}}
@@ -72,10 +84,12 @@ jobs:
               uses: docker/build-push-action@v6
               with:
                   context: ./rust
-                  file: ./rust/hot-path/Dockerfile
+                  file: ./rust/api-prime/Dockerfile
                   platforms: linux/arm64
                   push: true
+                  build-args: |
+                      BINARY=${{ matrix.binary }}
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
-                  cache-from: type=gha,scope=hot-path
-                  cache-to: type=gha,scope=hot-path,mode=max
+                  cache-from: type=gha,scope=${{ matrix.binary }}
+                  cache-to: type=gha,scope=${{ matrix.binary }},mode=max

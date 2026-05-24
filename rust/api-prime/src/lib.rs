@@ -1,8 +1,10 @@
-//! Library surface for `smooai-hot-path`.
+//! Library surface for `smooai-api-prime`.
 //!
-//! The main binary lives in `src/main.rs`. This `lib.rs` re-exports the
-//! modules so integration tests under `tests/` can construct an
-//! `AppState` and exercise the router without going through `main`.
+//! Renamed from `smooai-hot-path` per ADR-017. Binaries live under
+//! `src/bin/` (`api-prime.rs` for the data plane, `api-prime-controller.rs`
+//! for the control plane). This `lib.rs` re-exports the modules so
+//! integration tests under `tests/` can construct an `AppState` and
+//! exercise the router without going through `main`.
 
 pub mod auth;
 pub mod cache;
