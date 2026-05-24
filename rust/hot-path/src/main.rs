@@ -4,10 +4,13 @@
 //! SMOODEV-1227 scaffold (Phase 5c of the EKS migration plan).
 //!
 //! Endpoints exposed today:
-//! - `GET  /health/liveness`             — process alive
-//! - `GET  /health/readiness`            — pool + redis reachable
-//! - `GET  /v1/profile`                  — Supabase-JWT-authenticated profile read
-//! - `POST /v1/auth/sign-in`             — stub (501), see `handlers::auth`
+//! - `GET  /health/liveness`                       — process alive
+//! - `GET  /health/readiness`                      — pool + redis reachable
+//! - `GET  /v1/profile`                            — Supabase-JWT-authenticated profile read
+//! - `POST /v1/auth/sign-in`                       — stub (501), see `handlers::auth`
+//! - `GET  /v1/organizations`                      — orgs the user is a member of (+ parent-admin managed)
+//! - `GET  /v1/organizations/:org_id/features`     — computed feature set (defaults + products + overrides + internal)
+//! - `GET  /v1/organizations/:org_id/products`     — active products with order + stripe_product relations
 
 use std::net::SocketAddr;
 
@@ -54,6 +57,15 @@ async fn main() -> anyhow::Result<()> {
         .route("/health/readiness", get(handlers::health::readiness))
         .route("/v1/profile", get(handlers::profile::get_profile))
         .route("/v1/auth/sign-in", post(handlers::auth::sign_in))
+        .route("/v1/organizations", get(handlers::organizations::list_organizations))
+        .route(
+            "/v1/organizations/:org_id/features",
+            get(handlers::organization_features::get_organization_features),
+        )
+        .route(
+            "/v1/organizations/:org_id/products",
+            get(handlers::organization_products::list_organization_products),
+        )
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::permissive())
         .with_state(state);

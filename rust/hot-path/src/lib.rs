@@ -9,6 +9,7 @@ pub mod cache;
 pub mod db;
 pub mod error;
 pub mod handlers;
+pub mod product_constants;
 pub mod state;
 
 pub mod test_support {
@@ -26,6 +27,15 @@ pub mod test_support {
             .route("/health/readiness", get(handlers::health::readiness))
             .route("/v1/profile", get(handlers::profile::get_profile))
             .route("/v1/auth/sign-in", post(handlers::auth::sign_in))
+            .route("/v1/organizations", get(handlers::organizations::list_organizations))
+            .route(
+                "/v1/organizations/:org_id/features",
+                get(handlers::organization_features::get_organization_features),
+            )
+            .route(
+                "/v1/organizations/:org_id/products",
+                get(handlers::organization_products::list_organization_products),
+            )
             .with_state(state)
     }
 }

@@ -15,6 +15,9 @@ pub enum AppError {
     #[error("unauthorized: {0}")]
     Unauthorized(String),
 
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+
     #[error("not found: {0}")]
     NotFound(String),
 
@@ -47,6 +50,7 @@ impl AppError {
     fn status(&self) -> StatusCode {
         match self {
             AppError::Unauthorized(_) | AppError::Jwt(_) => StatusCode::UNAUTHORIZED,
+            AppError::Forbidden(_) => StatusCode::FORBIDDEN,
             AppError::NotFound(_) => StatusCode::NOT_FOUND,
             AppError::BadRequest(_) => StatusCode::BAD_REQUEST,
             AppError::NotImplemented(_) => StatusCode::NOT_IMPLEMENTED,
