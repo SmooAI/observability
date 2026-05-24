@@ -19,10 +19,11 @@ dioxus = { version = "0.6", features = ["desktop", "router"] }
 dioxus-desktop = "0.6"
 
 # Shared SmooAI design tokens + CSS + monogram from the cross-language
-# `@smooai/ui` repo. Path-dep today; switches to a `crates.io` registry pin
-# once the crate is published. Both smooblue and observability-studio
-# consume from the same source.
-smooai-ui = { path = "../../ui/rust" }
+# `@smooai/ui` repo. Tag-pinned git dep so CI sees a reproducible source
+# without needing the sibling repo checked out. Devs working on tokens
+# locally can override to a path dep via desktop/.cargo/config.toml
+# (committed) — see that file for the recipe.
+smooai-ui = { git = "https://github.com/SmooAI/ui.git", tag = "v0.1.0" }
 
 # Async + HTTP
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }

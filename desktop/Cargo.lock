@@ -4247,6 +4247,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 [[package]]
 name = "smooai-ui"
 version = "0.1.0"
+source = "git+https://github.com/SmooAI/ui.git?tag=v0.1.0#60426f134a06096bad3fce4523db1a904e9bc657"
 
 [[package]]
 name = "socket2"

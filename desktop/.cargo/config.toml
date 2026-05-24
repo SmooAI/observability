@@ -1,0 +1,9 @@
+# Cargo workspace config for the Observability Studio desktop crates.
+#
+# The default `smooai-ui` dep in Cargo.toml points at the public git tag so
+# CI builds are reproducible without needing the SmooAI/ui repo cloned. If
+# you have the sibling checkout at `~/dev/smooai/ui/`, uncomment the patch
+# block below to use it instead — handy when iterating on tokens.
+#
+# [patch."https://github.com/SmooAI/ui.git"]
+# smooai-ui = { path = "../../ui/rust" }
