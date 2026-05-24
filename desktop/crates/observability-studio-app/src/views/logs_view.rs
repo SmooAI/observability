@@ -28,6 +28,11 @@ use crate::state::ApiState;
 
 const PAGE_LIMIT: u32 = 100;
 
+/// Default live-tail interval. Picked to match the dashboard's "Auto-refresh"
+/// affordance: tight enough to feel live, loose enough that a single tab
+/// doesn't hammer the backend.
+const LIVE_TAIL_INTERVAL_SECS: u64 = 5;
+
 /// Bundle of state that triggers a fetch. We hash dependencies via a single
 /// signal so `use_resource` re-runs the right number of times.
 #[derive(Clone, PartialEq)]
@@ -54,6 +59,24 @@ pub fn LogsView(org_id: Uuid) -> Element {
     let mut search_draft = use_signal(String::new);
     let mut search_committed = use_signal(String::new);
     let mut refresh_nonce = use_signal(|| 0u64);
+    // Live-tail. Default off — production user opens the app, wants stable
+    // data to scroll through; opt in once they're ready to watch.
+    let mut tail_enabled = use_signal(|| false);
+    let tail_interval = std::time::Duration::from_secs(LIVE_TAIL_INTERVAL_SECS);
+
+    // Background ticker — re-fires the resources every `tail_interval` while
+    // tail is on. use_future auto-cancels the previous task when its
+    // dependencies (here: `tail_enabled()`) change, so flipping the toggle
+    // off stops the loop within one interval.
+    use_future(move || async move {
+        if !tail_enabled() {
+            return;
+        }
+        loop {
+            tokio::time::sleep(tail_interval).await;
+            refresh_nonce.with_mut(|n| *n += 1);
+        }
+    });
 
     // Expanded-row tracker — keyed by the row's `timestamp + log_stream`,
     // mirroring how the egui port disambiguated CloudWatch rows with the same
@@ -130,6 +153,28 @@ pub fn LogsView(org_id: Uuid) -> Element {
                 TimeRangePicker {
                     selected: preset(),
                     on_change: move |p| preset.set(p),
+                }
+                {
+                    // Live-tail toggle. When on:
+                    //   - the background ticker is running (every 5s nonce++)
+                    //   - the button shows a pulsing accent dot + "Live"
+                    //   - clicking the button stops the ticker
+                    let on = tail_enabled();
+                    let class = if on { "btn btn--primary" } else { "btn btn--outline" };
+                    let label = if on { "● Live" } else { "○ Live" };
+                    rsx! {
+                        button {
+                            class: "{class}",
+                            title: if on { "Auto-refreshing every 5s — click to stop" } else { "Auto-refresh every 5s" },
+                            onclick: move |_| tail_enabled.set(!tail_enabled()),
+                            // The dot is rendered inline so we can pulse it
+                            // via CSS on the parent's modifier class.
+                            span {
+                                class: if on { "live-dot live-dot--on" } else { "live-dot" },
+                            }
+                            span { style: "margin-left: 6px;", "{label}" }
+                        }
+                    }
                 }
                 button {
                     class: "btn btn--outline",
