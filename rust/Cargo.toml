@@ -1,5 +1,5 @@
 [workspace]
-members = ["observability", "hot-path"]
+members = ["observability", "api-prime"]
 resolver = "2"
 
 [profile.release]

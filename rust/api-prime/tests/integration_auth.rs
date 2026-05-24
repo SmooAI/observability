@@ -10,7 +10,7 @@ use axum::{
 };
 use http_body_util::BodyExt;
 use serde_json::{json, Value};
-use smooai_hot_path::{auth::jwt::JwksCache, state::AppState, test_support::build_router};
+use smooai_api_prime::{auth::jwt::JwksCache, state::AppState, test_support::build_router};
 use tower::ServiceExt;
 use wiremock::{
     matchers::{body_json, header, method, path, query_param},

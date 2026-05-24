@@ -1,17 +1,25 @@
 [package]
-name = "smooai-hot-path"
+name = "smooai-api-prime"
 version = "0.1.0"
 edition = "2021"
-description = "SmooAI hot-path read API — axum + sqlx + redis service serving high-traffic sidebar endpoints from EKS (replaces cold-start-prone Lambdas)"
+description = "SmooAI api-prime — axum read API (data plane) + control-plane controller, replacing the API Gateway/Lambda hot-path. See ADR-017."
 license = "MIT"
 repository = "https://github.com/SmooAI/observability"
 homepage = "https://github.com/SmooAI/observability"
 authors = ["SmooAI <brent@smoo.ai>"]
 readme = "README.md"
 
+# Data-plane binary (HPA-scaled, stateless read API).
 [[bin]]
-name = "smooai-hot-path"
-path = "src/main.rs"
+name = "api-prime"
+path = "src/bin/api-prime.rs"
+
+# Control-plane binary (single replica, owns route table state in Valkey).
+# Wave 3 fills in the reconcile loop, admin API, internal API, Lambda
+# health probing, and OpenAPI generation. See ADR-017.
+[[bin]]
+name = "api-prime-controller"
+path = "src/bin/api-prime-controller.rs"
 
 [dependencies]
 # HTTP server

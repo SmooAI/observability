@@ -7,8 +7,8 @@ use axum::{
     http::{Request, StatusCode},
 };
 use http_body_util::BodyExt;
-use smooai_hot_path::test_support::build_router;
-use smooai_hot_path::{auth::jwt::JwksCache, state::AppState};
+use smooai_api_prime::test_support::build_router;
+use smooai_api_prime::{auth::jwt::JwksCache, state::AppState};
 use tower::ServiceExt;
 
 fn lazy_state() -> AppState {

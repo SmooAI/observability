@@ -1,9 +1,10 @@
-//! smooai-hot-path: axum HTTP service serving high-traffic read endpoints.
+//! api-prime: axum HTTP data-plane service serving high-traffic read endpoints.
 //!
-//! See `README.md` for the full overview. This crate is part of the
-//! SMOODEV-1227 scaffold (Phase 5c of the EKS migration plan).
+//! Renamed from `smooai-hot-path` per ADR-017 (Edge Mesh / api-prime split).
+//! This is the data-plane binary; the control-plane lives in
+//! `src/bin/api-prime-controller.rs`. Wave 3 fills in routing + edge logic.
 //!
-//! Endpoints exposed today:
+//! Endpoints exposed today (unchanged behavior from the hot-path crate):
 //! - `GET  /health/liveness`             — process alive
 //! - `GET  /health/readiness`            — pool + redis reachable
 //! - `GET  /v1/profile`                  — Supabase-JWT-authenticated profile read
@@ -17,7 +18,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use smooai_hot_path::{auth::jwt::JwksCache, cache, db, handlers, state::AppState};
+use smooai_api_prime::{auth::jwt::JwksCache, cache, db, handlers, state::AppState};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 
@@ -26,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     init_tracing();
 
     let config = Config::from_env()?;
-    tracing::info!(port = config.port, "starting smooai-hot-path");
+    tracing::info!(port = config.port, "starting api-prime (data plane)");
 
     let pool = db::init_pool(&config.database_url)
         .await

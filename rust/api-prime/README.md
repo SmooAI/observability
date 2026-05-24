@@ -1,12 +1,20 @@
-# smooai-hot-path
+# smooai-api-prime
 
-Rust hot-path read API for SmooAI. Owns the high-traffic sidebar endpoints
-that are too cold-start-prone on Lambda. Designed to run on EKS alongside
-LiteLLM and Voice (Phases 3–5 of the EKS migration plan).
+Rust api-prime crate for SmooAI. Renamed from `smooai-api-prime` per
+**ADR-017** (Edge Mesh / api-prime split). Houses two binaries from a
+single workspace member:
 
-This crate is the **SMOODEV-1227 scaffold** — Phase 5c of the plan in
-`~/.claude/plans/indexed-tinkering-hummingbird.md`. The follow-up Wave 2
-agent fills in `POST /v1/auth/sign-in` and the remaining `/v1/*` reads.
+- `api-prime` — data plane. HPA-scaled, stateless. Today serves the
+  high-traffic sidebar / auth endpoints that are too cold-start-prone
+  on Lambda. Wave 3 turns it into a thin reverse-proxy fronting a
+  manifest-driven route table.
+- `api-prime-controller` — control plane. Single replica. Owns the
+  route table state in Valkey, exposes an admin API + an internal
+  cache-invalidate API consumed by data-plane pods.
+
+This crate originated as the **SMOODEV-1227 scaffold** (Phase 5c of the
+EKS migration plan). The rename + controller skeleton land under
+**SMOODEV-1272**.
 
 ## Endpoints
 
@@ -70,22 +78,22 @@ point of having a hot-path service.
 cd rust
 
 # Build (uses the workspace at rust/Cargo.toml)
-cargo build -p smooai-hot-path
+cargo build -p smooai-api-prime
 
 # Release build
-cargo build --release -p smooai-hot-path
+cargo build --release -p smooai-api-prime
 
 # Run tests
-cargo test -p smooai-hot-path
+cargo test -p smooai-api-prime
 
 # Lint
-cargo clippy -p smooai-hot-path --all-targets -- -D warnings
+cargo clippy -p smooai-api-prime --all-targets -- -D warnings
 
 # Run it (requires a reachable Postgres + Supabase)
 DATABASE_URL=postgres://postgres@127.0.0.1:54322/postgres \
 SUPABASE_URL=https://xrqbqgotghitcfuoukdk.supabase.co \
 SUPABASE_ANON_KEY=<anon-key> \
-cargo run -p smooai-hot-path
+cargo run -p smooai-api-prime
 ```
 
 The integration tests in `tests/integration_profile.rs` use
@@ -94,7 +102,7 @@ exercise the routing + auth-header parsing only.
 
 ## Docker
 
-The Dockerfile lives at `rust/hot-path/Dockerfile` but its build context
+The Dockerfile lives at `rust/api-prime/Dockerfile` but its build context
 must be the workspace root `rust/`, because cargo needs to see the
 sibling members listed in `rust/Cargo.toml`.
 
@@ -102,8 +110,8 @@ sibling members listed in `rust/Cargo.toml`.
 # From observability repo root
 docker buildx build \
     --platform linux/arm64 \
-    -t ghcr.io/smooai/hot-path:dev \
-    -f rust/hot-path/Dockerfile \
+    -t ghcr.io/smooai/api-prime:dev \
+    -f rust/api-prime/Dockerfile \
     rust/
 ```
 
@@ -130,5 +138,7 @@ exposes port 3000.
    plan: `/v1/organizations`, `/v1/organizations/:id/features`,
    `/v1/organizations/:id/products`, and the batched `/me/bootstrap`.
 2. Wire EKS deployment manifests in the smooai monorepo at
-   `apps/k8s/apps/hot-path/`.
+   `apps/k8s/apps/api-prime/` and `apps/k8s/apps/api-prime-controller/`.
 3. Hook into the shadow harness from Phase 6.
+4. Fill in the controller (Wave 3): reconcile loop, admin endpoints,
+   internal cache invalidation, Lambda health probing, OpenAPI emission.
