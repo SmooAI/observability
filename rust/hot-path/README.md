@@ -10,14 +10,22 @@ agent fills in `POST /v1/auth/sign-in` and the remaining `/v1/*` reads.
 
 ## Endpoints
 
-| Method | Path                  | Status   | Notes                                                   |
-| ------ | --------------------- | -------- | ------------------------------------------------------- |
-| GET    | `/health/liveness`    | working  | process alive                                           |
-| GET    | `/health/readiness`   | working  | pings Postgres + Redis                                  |
-| GET    | `/v1/profile`         | working  | port of `packages/backend/src/routes/profile.ts` (GET)  |
-| POST   | `/v1/auth/sign-in`    | **stub** | 501 — schema + TODO present, real impl in next PR       |
+| Method | Path                                       | Status   | Notes                                                                                                       |
+| ------ | ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------- |
+| GET    | `/health/liveness`                         | working  | process alive                                                                                               |
+| GET    | `/health/readiness`                        | working  | pings Postgres + Redis                                                                                      |
+| GET    | `/v1/profile`                              | working  | port of `packages/backend/src/routes/profile.ts` (GET) — 5min Redis cache                                   |
+| POST   | `/v1/auth/sign-in`                         | **stub** | 501 — schema + TODO present, real impl in SMOODEV-1230                                                      |
+| GET    | `/v1/organizations`                        | working  | port of `packages/backend/src/routes/organizations.ts` (GET list) — 60s Redis cache                         |
+| GET    | `/v1/organizations/:org_id/features`       | working  | port of `packages/backend/src/routes/organization-features.ts` — 60s Redis cache (heaviest of the three)    |
+| GET    | `/v1/organizations/:org_id/products`       | working  | port of `packages/backend/src/routes/products.ts` (GET list) with `order` + `stripeProduct` — 60s Redis cache |
 
-`GET /v1/profile` requires `Authorization: Bearer <supabase-jwt>`.
+All `/v1/*` endpoints require `Authorization: Bearer <supabase-jwt>`.
+
+Per-org endpoints (`features`, `products`) additionally verify the JWT's
+`sub` claim corresponds to a member of `org_id` and 403 otherwise. The
+admin Postgres URL means we don't get RLS for free, so we enforce
+membership in SQL — same trade as `/v1/profile`.
 
 ### Divergence from the TS implementation
 
@@ -104,10 +112,13 @@ exposes port 3000.
 ## What's next (Wave 2 — Phase 5d)
 
 1. Implement `POST /v1/auth/sign-in` — see the docstring in
-   `src/handlers/auth.rs` for the full checklist.
-2. Add the remaining `/v1/*` read endpoints listed in Phase 5c of the
-   plan: `/v1/organizations`, `/v1/organizations/:id/features`,
-   `/v1/organizations/:id/products`, and the batched `/me/bootstrap`.
+   `src/handlers/auth.rs` for the full checklist (SMOODEV-1230).
+2. ~~Add the remaining `/v1/*` read endpoints listed in Phase 5c~~ — shipped
+   in SMOODEV-1238. The batched `/me/bootstrap` is the only one outstanding
+   and can land once the dashboard has a consumer for it.
 3. Wire EKS deployment manifests in the smooai monorepo at
    `apps/k8s/apps/hot-path/`.
-4. Hook into the shadow harness from Phase 6.
+4. Hook into the shadow harness from Phase 6 — Theia's `stableStringify`
+   in `packages/backend/src/middleware/shadow-mirror.ts` is the canonical
+   compare. The Rust side sorts the `features` array before serialization
+   so the JSON hash matches without an extra Rust-side normalizer.
