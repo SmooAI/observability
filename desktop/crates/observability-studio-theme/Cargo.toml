@@ -1,0 +1,11 @@
+[package]
+name = "observability-studio-theme"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Observability Studio's app-specific CSS layer — composes smooai-brand foundations with views unique to this app"
+
+[dependencies]
+# The shared SmooAI design system (tokens + base components + monogram).
+smooai-ui.workspace = true

@@ -1,0 +1,33 @@
+[package]
+name = "observability-studio-app"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "SmooAI Observability Studio — Dioxus 0.6 desktop"
+
+[[bin]]
+name = "observability-studio"
+path = "src/main.rs"
+
+[dependencies]
+dioxus.workspace = true
+dioxus-desktop.workspace = true
+
+# Shared client + theme
+observability-studio-client = { path = "../observability-studio-client" }
+observability-studio-theme = { path = "../observability-studio-theme" }
+
+# Persistence + IO
+chrono.workspace = true
+directories.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+url.workspace = true
+uuid.workspace = true
+
+# Errors
+anyhow.workspace = true
+thiserror.workspace = true

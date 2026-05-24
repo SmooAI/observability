@@ -151,7 +151,9 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
             try {
                 await tokenProvider.getAccessToken();
             } catch (mintErr) {
-                warn(`bootstrap: initial token mint failed; OTLP exports will retry on first export: ${mintErr instanceof Error ? mintErr.message : String(mintErr)}`);
+                warn(
+                    `bootstrap: initial token mint failed; OTLP exports will retry on first export: ${mintErr instanceof Error ? mintErr.message : String(mintErr)}`,
+                );
             }
         } else {
             // Neither auth mode configured. SDK still starts; exports will

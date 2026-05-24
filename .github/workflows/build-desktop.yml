@@ -1,0 +1,123 @@
+name: Build desktop (Observability Studio)
+
+# Builds the Dioxus desktop client across macOS + Linux + Windows. Runs on:
+#   * tag push matching `studio-v*`         → uploads bundles to the matching
+#                                             GitHub Release.
+#   * manual dispatch                        → uploads as workflow artifacts only.
+#   * any push that touches `desktop/`       → smoke test (build only, no
+#                                             release upload).
+#
+# Code-signing + notarization is intentionally a follow-up (`SMOODEV-XXX`);
+# this workflow ships unsigned bundles so we have a downloadable artifact
+# right away.
+on:
+    push:
+        tags: ['studio-v*']
+        paths:
+            - 'desktop/**'
+            - '.github/workflows/build-desktop.yml'
+        branches: [main]
+    workflow_dispatch:
+
+permissions:
+    contents: write # for release-creation in the tagged-build job
+
+jobs:
+    build:
+        name: Build (${{ matrix.target }})
+        runs-on: ${{ matrix.runner }}
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - target: macos
+                      runner: macos-14
+                      script: bash desktop/scripts/bundle-macos.sh
+                      artifact_glob: desktop/target/bundle/macos/*.dmg
+                      artifact_name: macos-dmg
+                    - target: linux
+                      runner: ubuntu-latest
+                      script: bash desktop/scripts/bundle-linux.sh
+                      artifact_glob: desktop/target/bundle/linux/*.AppImage
+                      artifact_name: linux-appimage
+                    - target: windows
+                      runner: windows-latest
+                      # Powershell on windows-latest uses pwsh by default.
+                      script: pwsh desktop/scripts/bundle-windows.ps1
+                      artifact_glob: desktop/target/bundle/windows/*.zip
+                      artifact_name: windows-zip
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: desktop -> target
+
+            # Dioxus desktop uses wry / WebKitGTK on Linux. The runner image
+            # ships gtk3 but not webkit2gtk-4.1, so we install both. Pin the
+            # WebKitGTK ABI to 4.1 to match what wry 0.51 links against.
+            - name: Install Linux deps
+              if: matrix.target == 'linux'
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y \
+                      libwebkit2gtk-4.1-dev \
+                      libgtk-3-dev \
+                      libsoup-3.0-dev \
+                      libjavascriptcoregtk-4.1-dev \
+                      libxdo-dev \
+                      libayatana-appindicator3-dev \
+                      desktop-file-utils \
+                      fakeroot
+
+            - name: Run bundle script
+              shell: bash
+              run: |
+                  cd "${GITHUB_WORKSPACE}"
+                  # Powershell scripts need to run via pwsh on Windows runners
+                  # — call from cmd to inherit %PATH%.
+                  if [[ "${{ matrix.target }}" == "windows" ]]; then
+                      pwsh -File desktop/scripts/bundle-windows.ps1
+                  else
+                      ${{ matrix.script }}
+                  fi
+
+            - name: Upload bundle artifact
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.artifact_name }}
+                  path: ${{ matrix.artifact_glob }}
+                  if-no-files-found: error
+                  retention-days: 30
+
+    release:
+        # Only run on tag push — collects all three platforms' bundles and
+        # publishes a GitHub Release. workflow_dispatch + branch pushes leave
+        # the bundles as ordinary artifacts.
+        name: Publish release
+        needs: build
+        if: startsWith(github.ref, 'refs/tags/studio-v')
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/download-artifact@v4
+              with:
+                  path: ./release-assets
+
+            - name: Show what we got
+              run: ls -lR ./release-assets
+
+            - name: Publish GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  files: |
+                      release-assets/macos-dmg/*
+                      release-assets/linux-appimage/*
+                      release-assets/windows-zip/*
+                  generate_release_notes: true
+                  draft: false
+                  prerelease: false

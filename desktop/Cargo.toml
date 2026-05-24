@@ -1,0 +1,47 @@
+[workspace]
+members = [
+    "crates/observability-studio-app",
+    "crates/observability-studio-client",
+    "crates/observability-studio-theme",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["SmooAI <brent@smoo.ai>"]
+repository = "https://github.com/SmooAI/observability"
+homepage = "https://github.com/SmooAI/observability"
+
+[workspace.dependencies]
+# Dioxus desktop — same stack as smooblue.
+dioxus = { version = "0.6", features = ["desktop", "router"] }
+dioxus-desktop = "0.6"
+
+# Shared SmooAI design tokens + CSS + monogram from the cross-language
+# `@smooai/ui` repo. Path-dep today; switches to a `crates.io` registry pin
+# once the crate is published. Both smooblue and observability-studio
+# consume from the same source.
+smooai-ui = { path = "../../ui/rust" }
+
+# Async + HTTP
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+chrono = { version = "0.4", features = ["serde"] }
+url = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Persistence
+keyring = { version = "3", default-features = false, features = ["apple-native", "windows-native", "linux-native"] }
+directories = "5"
+
+# Errors
+thiserror = "2"
+anyhow = "1"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "abort"
