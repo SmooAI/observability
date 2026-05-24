@@ -1,0 +1,81 @@
+name: Build hot-path image
+
+# SMOODEV-1246: Build + push the smooai-hot-path container to GHCR.
+#
+# Triggers:
+#   * push to main touching `rust/hot-path/**`, the surrounding workspace
+#     `rust/Cargo.toml`, or this workflow itself → build, tag, push
+#   * `workflow_dispatch` → manual build (useful for emergency rebuilds)
+#
+# Tagging strategy:
+#   * `:main-<sha>`   — primary mutable tag the ArgoCD Image Updater watches
+#   * `:<sha>`        — immutable per-commit tag (debug rollbacks)
+#   * `:latest`       — convenience tag for local `docker pull`
+#
+# Build context note:
+#   `rust/hot-path/Dockerfile` requires the *workspace root* (`rust/`) as the
+#   build context — the multi-crate workspace shares one Cargo.lock. We pass
+#   `context: ./rust` + `file: ./rust/hot-path/Dockerfile` to docker/build-push.
+#
+# Runner:
+#   Self-hosted smoo-hub Linux VM (mac-mini-linux) per the repo convention for
+#   any heavy build. Linux/arm64 single-arch matches the EKS Graviton node pool.
+on:
+    push:
+        branches: [main]
+        paths:
+            - 'rust/hot-path/**'
+            - 'rust/Cargo.toml'
+            - 'rust/Cargo.lock'
+            - '.github/workflows/build-hot-path.yml'
+    workflow_dispatch:
+
+permissions:
+    contents: read
+    packages: write
+
+env:
+    REGISTRY: ghcr.io
+    IMAGE_NAME: smooai/hot-path
+
+jobs:
+    build-and-push:
+        name: Build + push (linux/arm64)
+        runs-on: [self-hosted, mac-mini-linux, ci]
+        timeout-minutes: 45
+
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+
+            - name: Log in to GHCR
+              uses: docker/login-action@v3
+              with:
+                  registry: ${{ env.REGISTRY }}
+                  username: ${{ github.actor }}
+                  password: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Extract metadata (tags, labels)
+              id: meta
+              uses: docker/metadata-action@v5
+              with:
+                  images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+                  tags: |
+                      type=sha,format=short,prefix=
+                      type=sha,format=short,prefix=main-,enable={{is_default_branch}}
+                      type=raw,value=latest,enable={{is_default_branch}}
+
+            - name: Build and push
+              uses: docker/build-push-action@v6
+              with:
+                  context: ./rust
+                  file: ./rust/hot-path/Dockerfile
+                  platforms: linux/arm64
+                  push: true
+                  tags: ${{ steps.meta.outputs.tags }}
+                  labels: ${{ steps.meta.outputs.labels }}
+                  cache-from: type=gha,scope=hot-path
+                  cache-to: type=gha,scope=hot-path,mode=max
