@@ -1633,3 +1633,36 @@ input {
     color: var(--foreground-subtle);
     font-family: var(--font-mono);
 }
+
+/* ===========================================================
+ *  Live-tail indicator (Logs view header)
+ * =========================================================== */
+
+@keyframes live-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.6);
+        opacity: 0.35;
+    }
+}
+
+.live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.55;
+    vertical-align: middle;
+}
+
+.live-dot--on {
+    background: var(--smoo-green);
+    box-shadow: 0 0 8px var(--smoo-green);
+    animation: live-pulse 1.4s ease-in-out infinite;
+    opacity: 1;
+}
