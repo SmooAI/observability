@@ -75,7 +75,7 @@ async fn liveness_returns_ok() {
 }
 
 #[tokio::test]
-async fn sign_in_returns_not_implemented() {
+async fn sign_in_rejects_invalid_email() {
     let app = build_router(lazy_state());
     let response = app
         .oneshot(
@@ -83,10 +83,10 @@ async fn sign_in_returns_not_implemented() {
                 .method("POST")
                 .uri("/v1/auth/sign-in")
                 .header("content-type", "application/json")
-                .body(Body::from(r#"{"email":"a@b.c","password":"x"}"#))
+                .body(Body::from(r#"{"email":"not-an-email","password":"x"}"#))
                 .unwrap(),
         )
         .await
         .unwrap();
-    assert_eq!(response.status(), StatusCode::NOT_IMPLEMENTED);
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
 }

@@ -26,6 +26,7 @@ pub mod test_support {
             .route("/health/readiness", get(handlers::health::readiness))
             .route("/v1/profile", get(handlers::profile::get_profile))
             .route("/v1/auth/sign-in", post(handlers::auth::sign_in))
+            .route("/v1/auth/refresh", post(handlers::auth::refresh))
             .with_state(state)
     }
 }

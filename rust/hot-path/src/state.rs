@@ -11,6 +11,5 @@ pub struct AppState {
     pub jwks: JwksCache,
     pub http: reqwest::Client,
     pub supabase_url: String,
-    #[allow(dead_code)] // Used by sign-in stub once implemented.
     pub supabase_anon_key: String,
 }
