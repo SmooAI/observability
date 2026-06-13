@@ -1,30 +1,23 @@
 <a name="readme-top"></a>
 
 <p align="center">
-  <a href="https://smoo.ai"><img src="https://smoo.ai/images/logo/logo.svg" alt="Smoo AI" width="220" /></a>
-</p>
-
-<h1 align="center">@smooai/observability</h1>
-
-<p align="center">
-  <strong>Sentry-style error capture and grouping for the browser and Node, with first-class React and Next.js wrappers — built on the SmooAI conventions you already know.</strong>
+  <a href="https://smoo.ai"><img src=".github/banner.png" alt="@smooai/observability — Error capture and grouping, your backend only." width="100%" /></a>
 </p>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@smooai/observability"><img src="https://img.shields.io/npm/v/@smooai/observability?style=flat-square&color=00A6A6&label=npm" alt="npm"></a>
-  <img src="https://img.shields.io/badge/Smoo_AI-platform-00A6A6?style=flat-square" alt="Smoo AI">
-  <img src="https://img.shields.io/badge/license-MIT-F49F0A?style=flat-square" alt="license">
+  <a href="https://www.npmjs.com/package/@smooai/observability"><img src="https://img.shields.io/npm/v/@smooai/observability?style=for-the-badge&color=00A6A6&label=npm&logo=npm&logoColor=white&labelColor=020618" alt="npm"></a>
+  <a href="https://smoo.ai"><img src="https://img.shields.io/badge/Smoo_AI-platform-00A6A6?style=for-the-badge&labelColor=020618" alt="Smoo AI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-F49F0A?style=for-the-badge&labelColor=020618" alt="license">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/TypeScript-strict_ESM-00A6A6?style=flat-square" alt="TypeScript">
   <img src="https://img.shields.io/github/actions/workflow/status/SmooAI/observability/pr-checks.yml?style=flat-square&color=00A6A6&label=CI" alt="CI">
   <img src="https://img.shields.io/npm/dw/@smooai/observability?style=flat-square&color=F49F0A&label=downloads" alt="downloads">
 </p>
 
 <p align="center">
-  <a href="#-features">Features</a> ·
-  <a href="#-install">Install</a> ·
-  <a href="#-usage">Usage</a> ·
-  <a href="#-architecture">Architecture</a> ·
-  <a href="#-part-of-smoo-ai">Platform</a>
+  <a href="#-features"><b>Features</b></a> &nbsp;·&nbsp; <a href="#-install"><b>Install</b></a> &nbsp;·&nbsp; <a href="#-usage"><b>Usage</b></a> &nbsp;·&nbsp; <a href="#-architecture"><b>Architecture</b></a> &nbsp;·&nbsp; <a href="#-part-of-smoo-ai"><b>Platform</b></a>
 </p>
 
 ---
@@ -169,22 +162,21 @@ The same ingest contract (`POST /webhooks/observability/{org_id}/{token}` with `
 
 The SDK is intentionally thin. It captures, batches, redacts PII, and POSTs to a Smoo ingest endpoint. All of the heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the Smoo platform.
 
-```
-┌──────────────────────────┐    POST /webhooks/observability/{org}/{token}
-│ @smooai/observability    │ ────────────────────────────────────────────▶
-│   ├─ capture handlers    │                  (Bearer B2M JWT, gzipped JSON)
-│   ├─ Scope / breadcrumbs │
-│   ├─ batched transport   │
-│   └─ PII scrub           │
-└──────────────────────────┘
-            ▲
-            │ wraps
-┌──────────────────────────┐      ┌──────────────────────────────────┐
-│ @smooai/observability-   │      │ @smooai/observability-next       │
-│   react                  │      │   ├─ withSmooObservability()     │
-│   ├─ <ErrorBoundary>     │      │   ├─ RootErrorBoundary           │
-│   └─ useErrorHandler()   │      │   └─ build-time sourcemap upload │
-└──────────────────────────┘      └──────────────────────────────────┘
+```mermaid
+%%{init: {'theme':'base','themeVariables':{
+  'background':'#020618','primaryColor':'#0b1426','primaryTextColor':'#e6edf6','primaryBorderColor':'#2b3a52',
+  'lineColor':'#7c8aa0','secondaryColor':'#0b1426','tertiaryColor':'#0b1426','fontFamily':'ui-sans-serif, system-ui, sans-serif',
+  'clusterBkg':'#0b1426','clusterBorder':'#22304a'}}}%%
+flowchart LR
+  REACT["observability-react<br/>ErrorBoundary · useErrorHandler"] -->|wraps| CORE
+  NEXT["observability-next<br/>withSmooObservability · sourcemaps"] -->|wraps| CORE
+  CORE["@smooai/observability<br/>capture · scope · scrub · batch"]
+  CORE -->|"POST /webhooks/observability/{org}/{token}<br/>Bearer B2M JWT · gzipped JSON"| INGEST[("Smoo platform<br/>group · symbolicate · alert")]
+
+  classDef warm fill:#f49f0a,stroke:#ff6b6c,color:#1a0f00;
+  classDef teal fill:#00a6a6,stroke:#00c2c2,color:#011;
+  class CORE warm
+  class INGEST teal
 ```
 
 Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Architecture.md](https://github.com/SmooAI/smooai/blob/main/docs/Architecture/Observability-Architecture.md).
@@ -212,14 +204,11 @@ This SDK is opinionated about privacy:
 
 ## 🧩 Part of Smoo AI {#part-of-smoo-ai}
 
-`@smooai/observability` is part of the [Smoo AI](https://smoo.ai) platform — an AI-powered business platform with AI built into every product. It is one of a small family of open-source packages we maintain to keep our own stack honest:
+`@smooai/observability` is built and open-sourced by **[Smoo AI](https://smoo.ai)** — the AI-powered business platform with AI built into every product: CRM, customer support, campaigns, field service, observability, and developer tools.
 
-- [@smooai/logger](https://github.com/SmooAI/logger) — structured logging
-- [@smooai/config](https://github.com/SmooAI/config) — typed configuration and secrets
-- [@smooai/fetch](https://github.com/SmooAI/fetch) — typed HTTP
-- [smooth](https://github.com/SmooAI/smooth) — the Smoo AI CLI (`th`) and orchestration platform
-
-See [smoo.ai/open-source](https://smoo.ai/open-source) for every package we ship, and [github.com/SmooAI](https://github.com/SmooAI) for the source.
+- 🚀 **Observability on the platform** — [smoo.ai/platform/observability](https://smoo.ai/platform/observability)
+- 🧰 **More open source from Smoo AI** — [smoo.ai/open-source](https://smoo.ai/open-source)
+- 🧩 **Sibling packages** — [@smooai/logger](https://github.com/SmooAI/logger), [@smooai/config](https://github.com/SmooAI/config), [@smooai/fetch](https://github.com/SmooAI/fetch), [smooth](https://github.com/SmooAI/smooth) (the `th` CLI)
 
 ## 🤝 Contributing
 
