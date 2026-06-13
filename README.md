@@ -1,44 +1,37 @@
 <a name="readme-top"></a>
 
-<!-- PROJECT LOGO -->
-<br />
-<div align="center">
-  <a href="https://smoo.ai">
-    <img src="images/logo.png" alt="SmooAI Logo" />
-  </a>
-</div>
+<p align="center">
+  <a href="https://smoo.ai"><img src="https://smoo.ai/images/logo/logo.svg" alt="Smoo AI" width="220" /></a>
+</p>
 
-<!-- ABOUT THE PROJECT -->
+<h1 align="center">@smooai/observability</h1>
 
-## About Smoo AI
+<p align="center">
+  <strong>Sentry-style error capture and grouping for the browser and Node, with first-class React and Next.js wrappers — built on the SmooAI conventions you already know.</strong>
+</p>
 
-**[Smoo AI](https://smoo.ai)** is an AI platform that helps businesses multiply their customer, employee, and developer experience — conversational AI for support and sales, paired with the production-grade developer tooling we use to build it.
+<p align="center">
+  <a href="https://www.npmjs.com/package/@smooai/observability"><img src="https://img.shields.io/npm/v/@smooai/observability?style=flat-square&color=00A6A6&label=npm" alt="npm"></a>
+  <img src="https://img.shields.io/badge/Smoo_AI-platform-00A6A6?style=flat-square" alt="Smoo AI">
+  <img src="https://img.shields.io/badge/license-MIT-F49F0A?style=flat-square" alt="license">
+  <img src="https://img.shields.io/badge/TypeScript-strict_ESM-00A6A6?style=flat-square" alt="TypeScript">
+  <img src="https://img.shields.io/github/actions/workflow/status/SmooAI/observability/pr-checks.yml?style=flat-square&color=00A6A6&label=CI" alt="CI">
+  <img src="https://img.shields.io/npm/dw/@smooai/observability?style=flat-square&color=F49F0A&label=downloads" alt="downloads">
+</p>
 
-This library is part of a small family of open-source packages we maintain to keep our own stack honest: structured logging, typed HTTP, file storage, configuration, and — now — error tracking. Use them in your stack, or take them as a reference for how we build.
+<p align="center">
+  <a href="#-features">Features</a> ·
+  <a href="#-install">Install</a> ·
+  <a href="#-usage">Usage</a> ·
+  <a href="#-architecture">Architecture</a> ·
+  <a href="#-part-of-smoo-ai">Platform</a>
+</p>
 
-- 🌐 [smoo.ai](https://smoo.ai) — the product
-- 📦 [smoo.ai/open-source](https://smoo.ai/open-source) — every open-source package we ship
-- 🐙 [github.com/SmooAI](https://github.com/SmooAI) — the source
+---
 
-## About @smooai/observability
+> The error-tracking platform we wished was already in our stack. You ship a deploy; somewhere out there a webpack chunk is 404'ing for one user and your sign-in page is silently broken. Your error boundary `console.error`s into the void, and your only signal is the support ticket that arrives forty minutes later. `@smooai/observability` fills that gap: automatic capture and grouping across every runtime, your events going to **your** Smoo backend only.
 
-**The error-tracking platform we wished was already in our stack.** Sentry-style capture and grouping for the browser and Node, with first-class wrappers for React and Next.js — built on the same SmooAI conventions you already know.
-
-![NPM Version](https://img.shields.io/npm/v/%40smooai%2Fobservability?style=for-the-badge)
-![NPM Downloads](https://img.shields.io/npm/dw/%40smooai%2Fobservability?style=for-the-badge)
-![NPM Last Update](https://img.shields.io/npm/last-update/%40smooai%2Fobservability?style=for-the-badge)
-
-![GitHub License](https://img.shields.io/github/license/SmooAI/observability?style=for-the-badge)
-![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/SmooAI/observability/pr-checks.yml?style=for-the-badge)
-![GitHub Repo stars](https://img.shields.io/github/stars/SmooAI/observability?style=for-the-badge)
-
-### Why @smooai/observability?
-
-You've shipped a deploy. Somewhere out there a webpack chunk is 404'ing for one user and your sign-in page is silently broken. Your error boundary console.errors into the void. Your only signal is the support ticket that arrives forty minutes later.
-
-That's the gap this package fills.
-
-**Captured automatically, on every runtime:**
+## ✨ Features
 
 **Browser**
 
@@ -65,7 +58,13 @@ That's the gap this package fills.
 - 🏗️ **`withSmooObservability(nextConfig)`** — enables production browser source maps and uploads them in CI
 - 🛡️ **`<RootErrorBoundary>`** — drop into `app/global-error.tsx` / `app/error.tsx`
 
-### Install
+### What does NOT get captured
+
+- `console.log` / `console.info` / `console.warn` — only `console.error` is tapped, and that's opt-out
+- HTTP request **bodies** — only method, path, status, and duration appear in breadcrumbs
+- Anything matching the PII scrub regex unless you explicitly allowlist it
+
+## 📦 Install
 
 ```sh
 pnpm add @smooai/observability                      # core (browser + Node)
@@ -75,7 +74,15 @@ pnpm add @smooai/observability-next                 # Next.js wrapper
 
 or with npm / yarn / bun — same names.
 
-### Quick Start (Next.js)
+| Package                                         | npm                                                                                                                                       | Purpose                                     |
+| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| [`@smooai/observability`](packages/core)        | [![npm](https://img.shields.io/npm/v/@smooai/observability?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability)             | Core client — browser + Node universal      |
+| [`@smooai/observability-react`](packages/react) | [![npm](https://img.shields.io/npm/v/@smooai/observability-react?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability-react) | React `<ErrorBoundary>` + `useErrorHandler` |
+| [`@smooai/observability-next`](packages/next)   | [![npm](https://img.shields.io/npm/v/@smooai/observability-next?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability-next)   | Next.js wrapper + sourcemap upload          |
+
+## 🚀 Usage
+
+### Next.js
 
 ```ts
 // next.config.ts
@@ -121,7 +128,7 @@ export default function GlobalError({ error, reset }: { error: Error & { digest?
 }
 ```
 
-### Quick Start (Browser SPA)
+### Browser SPA
 
 ```ts
 import { Client } from '@smooai/observability';
@@ -135,7 +142,7 @@ Client.init({
 Client.setUser({ id: 'user_abc', orgId: 'org_xyz' });
 ```
 
-### Quick Start (Node / Hono)
+### Node / Hono
 
 ```ts
 import { Client, observabilityMiddleware } from '@smooai/observability/node';
@@ -149,21 +156,7 @@ Client.init({
 app.use('*', observabilityMiddleware());
 ```
 
-### What Does NOT Get Captured
-
-- `console.log` / `console.info` / `console.warn` — only `console.error` is tapped, and that's opt-out
-- HTTP request **bodies** — only method, path, status, and duration appear in breadcrumbs
-- Anything matching the PII scrub regex unless you explicitly allowlist it
-
-### Packages
-
-| Package                                         | npm                                                                                                                                       | Purpose                                     |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
-| [`@smooai/observability`](packages/core)        | [![NPM Version](https://img.shields.io/npm/v/%40smooai%2Fobservability)](https://www.npmjs.com/package/@smooai/observability)             | Core client — browser + Node universal      |
-| [`@smooai/observability-react`](packages/react) | [![NPM Version](https://img.shields.io/npm/v/%40smooai%2Fobservability-react)](https://www.npmjs.com/package/@smooai/observability-react) | React `<ErrorBoundary>` + `useErrorHandler` |
-| [`@smooai/observability-next`](packages/next)   | [![NPM Version](https://img.shields.io/npm/v/%40smooai%2Fobservability-next)](https://www.npmjs.com/package/@smooai/observability-next)   | Next.js wrapper + sourcemap upload          |
-
-### Multi-Language Support
+### Multi-language support
 
 The same ingest contract (`POST /webhooks/observability/{org_id}/{token}` with `type: 'error'`) accepts events from any language. Follow-up SDKs:
 
@@ -172,7 +165,7 @@ The same ingest contract (`POST /webhooks/observability/{org_id}/{token}` with `
 - 🐹 **Go** — `github.com/smooai/observability-go` (tracked in SMOODEV-1067 follow-ups)
 - 💠 **.NET** — `SmooAI.Observability` on NuGet (tracked in SMOODEV-1067 follow-ups)
 
-## Architecture
+## 📖 Architecture
 
 The SDK is intentionally thin. It captures, batches, redacts PII, and POSTs to a Smoo ingest endpoint. All of the heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the Smoo platform.
 
@@ -196,7 +189,7 @@ The SDK is intentionally thin. It captures, batches, redacts PII, and POSTs to a
 
 Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Architecture.md](https://github.com/SmooAI/smooai/blob/main/docs/Architecture/Observability-Architecture.md).
 
-## Built With
+## 📖 Built with
 
 - **TypeScript** — strict mode, ESM-only, dual browser/Node entries via package `exports` map
 - **tsup** — bundling, dual ESM/types output, sourcemaps
@@ -204,7 +197,7 @@ Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Ar
 - **vitest** — unit tests
 - **changesets** — versioning + npm publish via GitHub Actions
 
-## Privacy & Telemetry
+## 📖 Privacy & telemetry
 
 This SDK is opinionated about privacy:
 
@@ -213,26 +206,33 @@ This SDK is opinionated about privacy:
 - We never send anything to a third-party service — your events go to **your** Smoo backend only
 - PII scrubbing is enabled by default and can be tuned per-tenant
 
-## Status
+## 📖 Status
 
 `0.1.0` — types and client skeleton are stable. The capture handlers, stack parsers, transport, and source-map upload land incrementally in upcoming `0.x` releases. The backend ingest, fingerprint grouping, dashboard, and customer-org rollout live in the [SmooAI/smooai monorepo](https://github.com/SmooAI/smooai) and are tracked under [SMOODEV-1067](https://smooai.atlassian.net/browse/SMOODEV-1067).
 
+## 🧩 Part of Smoo AI {#part-of-smoo-ai}
+
+`@smooai/observability` is part of the [Smoo AI](https://smoo.ai) platform — an AI-powered business platform with AI built into every product. It is one of a small family of open-source packages we maintain to keep our own stack honest:
+
+- [@smooai/logger](https://github.com/SmooAI/logger) — structured logging
+- [@smooai/config](https://github.com/SmooAI/config) — typed configuration and secrets
+- [@smooai/fetch](https://github.com/SmooAI/fetch) — typed HTTP
+- [smooth](https://github.com/SmooAI/smooth) — the Smoo AI CLI (`th`) and orchestration platform
+
+See [smoo.ai/open-source](https://smoo.ai/open-source) for every package we ship, and [github.com/SmooAI](https://github.com/SmooAI) for the source.
+
+## 🤝 Contributing
+
+Issues and PRs welcome. Maintained by Brent Rager — [email](mailto:brent@smoo.ai) · [LinkedIn](https://www.linkedin.com/in/brentrager/) · [BlueSky](https://bsky.app/profile/brentragertech.bsky.social) · [TikTok](https://www.tiktok.com/@brentragertech) · [Instagram](https://www.instagram.com/brentragertech/).
+
+## 📄 License
+
+MIT © Smoo AI, Inc. See [LICENSE](LICENSE).
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
-## Contact
+---
 
-Brent Rager
-
-- [Email](mailto:brent@smoo.ai)
-- [LinkedIn](https://www.linkedin.com/in/brentrager/)
-- [BlueSky](https://bsky.app/profile/brentragertech.bsky.social)
-- [TikTok](https://www.tiktok.com/@brentragertech)
-- [Instagram](https://www.instagram.com/brentragertech/)
-
-Smoo Github: [https://github.com/SmooAI](https://github.com/SmooAI)
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-## License
-
-MIT © Smoo AI, Inc.
+<p align="center">
+  Built by <a href="https://smoo.ai"><strong>Smoo AI</strong></a> — AI built into every product.
+</p>
