@@ -1,0 +1,284 @@
+name: Publish SDKs
+
+# Publish the per-language SDKs to their registries.
+#
+# This workflow is DORMANT by default: each job only runs when its own language
+# is selected, either by pushing a language-prefixed SemVer tag or by a manual
+# workflow_dispatch with the matching `language` input. Pushing to a branch does
+# NOT publish anything — only tags / dispatch trigger a publish.
+#
+# The TypeScript SDK is published separately via release.yml (changesets → npm);
+# this workflow deliberately does NOT touch the TS flow.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# REQUIRED GITHUB ACTIONS SECRETS (add under repo Settings → Secrets → Actions):
+#
+#   CARGO_REGISTRY_TOKEN   crates.io API token  (Rust publish)
+#                          https://crates.io/settings/tokens
+#
+#   NUGET_API_KEY          nuget.org API key    (.NET publish)
+#                          https://www.nuget.org/account/apikeys
+#
+#   PYPI_API_TOKEN         PyPI API token       (Python publish — ONLY needed if
+#                          NOT using PyPI Trusted Publishing / OIDC; see the
+#                          python job notes below)
+#
+# Go needs NO secret: pkg.go.dev pulls modules from the Go module proxy
+# automatically once a SemVer git tag exists.
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# TAGGING CONVENTION (push a tag to publish that language):
+#   rust-v<semver>      e.g. rust-v0.1.0     → crates.io
+#   python-v<semver>    e.g. python-v0.1.0   → PyPI
+#   dotnet-v<semver>    e.g. dotnet-v0.1.0   → NuGet
+#   go/v<semver>        e.g. go/v0.1.0       → pkg.go.dev (module proxy, no push)
+#
+# The Go tag prefix is `go/` (not `go-v`) because the module lives in the `go/`
+# subdirectory; Go's module proxy requires the tag to be `<subdir>/v<semver>`.
+#
+# Each tag should match the version declared in that language's manifest. Bump
+# the manifest version, commit, then push the matching tag.
+
+on:
+    workflow_dispatch:
+        inputs:
+            language:
+                description: 'Which SDK to publish'
+                required: true
+                type: choice
+                options:
+                    - rust
+                    - python
+                    - dotnet
+                    - go
+            dry_run:
+                description: 'Build + verify only, do not actually publish'
+                required: false
+                type: boolean
+                default: false
+    push:
+        tags:
+            - 'rust-v*'
+            - 'python-v*'
+            - 'dotnet-v*'
+            - 'go/v*'
+
+# Never run two publishes for the same ref at once.
+concurrency:
+    group: publish-${{ github.ref }}
+    cancel-in-progress: false
+
+jobs:
+    # ── Rust → crates.io ─────────────────────────────────────────────────────
+    rust:
+        if: >-
+            startsWith(github.ref, 'refs/tags/rust-v') ||
+            (github.event_name == 'workflow_dispatch' && inputs.language == 'rust')
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        defaults:
+            run:
+                working-directory: rust
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: rust -> target
+
+            # Gate publish on the same checks the PR lane runs, so a broken SDK
+            # can't ship.
+            - name: Format check
+              run: cargo fmt --all --check
+
+            - name: Clippy
+              run: cargo clippy --all-targets --all-features -- -D warnings
+
+            - name: Test
+              run: cargo test --all-features
+
+            # Verifies the crate packages cleanly (metadata, included files,
+            # builds from the packaged tarball) without uploading.
+            - name: Package (verify)
+              run: cargo package -p smooai-observability
+
+            - name: Publish to crates.io
+              if: ${{ !inputs.dry_run }}
+              run: cargo publish -p smooai-observability
+              env:
+                  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+    # ── Python → PyPI ────────────────────────────────────────────────────────
+    python:
+        if: >-
+            startsWith(github.ref, 'refs/tags/python-v') ||
+            (github.event_name == 'workflow_dispatch' && inputs.language == 'python')
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        # PyPI Trusted Publishing (OIDC) — no PYPI_API_TOKEN needed once the
+        # publisher is configured at https://pypi.org/manage/account/publishing/
+        # for this repo + workflow (publish.yml) + environment (pypi). If you
+        # would rather use a classic token, delete the `environment:` block,
+        # remove `id-token: write`, and set `password: ${{ secrets.PYPI_API_TOKEN }}`
+        # on the publish step below.
+        environment:
+            name: pypi
+            url: https://pypi.org/p/smooai-observability
+        permissions:
+            id-token: write # OIDC token for Trusted Publishing
+        defaults:
+            run:
+                working-directory: python
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.13
+
+            - name: Sync dependencies
+              run: uv sync --all-extras --dev --python 3.13
+
+            # Gate publish on the PR-lane checks.
+            - name: Ruff lint
+              run: uvx ruff check .
+
+            - name: Ruff format check
+              run: uvx ruff format --check .
+
+            - name: Test
+              run: uv run --with pytest pytest
+
+            - name: Build sdist + wheel
+              run: uv build --wheel --sdist
+
+            - name: Publish to PyPI (Trusted Publishing)
+              if: ${{ !inputs.dry_run }}
+              uses: pypa/gh-action-pypi-publish@release/v1
+              with:
+                  packages-dir: python/dist
+                  # If using a classic token instead of OIDC, uncomment:
+                  # password: ${{ secrets.PYPI_API_TOKEN }}
+
+    # ── .NET → NuGet ─────────────────────────────────────────────────────────
+    dotnet:
+        if: >-
+            startsWith(github.ref, 'refs/tags/dotnet-v') ||
+            (github.event_name == 'workflow_dispatch' && inputs.language == 'dotnet')
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        defaults:
+            run:
+                working-directory: dotnet
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  global-json-file: dotnet/global.json
+
+            - name: Restore
+              run: dotnet restore
+
+            - name: Build
+              run: dotnet build --no-restore --configuration Release
+
+            # Gate publish on tests.
+            - name: Test
+              run: dotnet test --no-build --configuration Release
+
+            # Packs the library project only (tests are IsPackable=false).
+            # Emits the .nupkg + .snupkg symbol package to ./nupkg.
+            - name: Pack
+              run: dotnet pack src/SmooAI.Observability/SmooAI.Observability.csproj --no-build --configuration Release --output nupkg
+
+            - name: Publish to NuGet
+              if: ${{ !inputs.dry_run }}
+              run: |
+                  dotnet nuget push "nupkg/*.nupkg" \
+                    --api-key "$NUGET_API_KEY" \
+                    --source https://api.nuget.org/v3/index.json \
+                    --skip-duplicate
+              env:
+                  NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+
+    # ── Go → pkg.go.dev (no publish step) ────────────────────────────────────
+    #
+    # Go modules are "published" implicitly: once a SemVer tag exists on the
+    # repo, the Go module proxy (proxy.golang.org) fetches and caches it, and
+    # pkg.go.dev indexes the docs. There is no registry to push to and no secret
+    # required. This job just validates the module is sound and warms the proxy
+    # so the new version is immediately resolvable.
+    go:
+        if: >-
+            startsWith(github.ref, 'refs/tags/go/v') ||
+            (github.event_name == 'workflow_dispatch' && inputs.language == 'go')
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        defaults:
+            run:
+                working-directory: go
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: '1.25'
+                  cache-dependency-path: go/go.mod
+
+            # Gate on the PR-lane checks before warming the proxy.
+            - name: Format check
+              run: |
+                  unformatted=$(gofmt -l .)
+                  if [ -n "$unformatted" ]; then
+                      echo "The following files are not gofmt-clean:"
+                      echo "$unformatted"
+                      exit 1
+                  fi
+
+            - name: Vet
+              run: go vet ./...
+
+            - name: Test
+              run: go test ./...
+
+            # Confirm the module path declared in go.mod matches the
+            # tag-derived path Go expects (github.com/SmooAI/observability/go).
+            - name: Verify module path
+              run: |
+                  EXPECTED="github.com/SmooAI/observability/go"
+                  ACTUAL=$(go list -m)
+                  echo "module path: $ACTUAL"
+                  if [ "$ACTUAL" != "$EXPECTED" ]; then
+                      echo "::error::go.mod module path '$ACTUAL' != expected '$EXPECTED'"
+                      exit 1
+                  fi
+
+            # Ask the module proxy to fetch the just-pushed tag so pkg.go.dev
+            # indexes it right away instead of on first external `go get`. Only
+            # meaningful on a tag push; harmless to skip on dispatch/dry-run.
+            - name: Warm module proxy
+              if: ${{ startsWith(github.ref, 'refs/tags/go/v') && !inputs.dry_run }}
+              run: |
+                  VERSION="${GITHUB_REF#refs/tags/go/}"
+                  echo "Requesting github.com/SmooAI/observability/go@$VERSION from the proxy"
+                  GOPROXY=proxy.golang.org GOFLAGS=-mod=mod \
+                    go install "github.com/SmooAI/observability/go@$VERSION" 2>/dev/null || true
+                  # Touch the proxy version endpoint directly as a fallback so the
+                  # version is registered even if the package has no installable
+                  # main; a library has none, so the curl is the reliable path.
+                  curl -fsSL "https://proxy.golang.org/github.com/!smoo!a!i/observability/go/@v/${VERSION}.info" \
+                    && echo "proxy registered $VERSION" \
+                    || echo "proxy fetch returned non-zero (it may catch up shortly)"
