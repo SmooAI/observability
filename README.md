@@ -67,8 +67,8 @@ pnpm add @smooai/observability-next                 # Next.js wrapper
 
 or with npm / yarn / bun — same names.
 
-| Package                                         | npm                                                                                                                                       | Purpose                                     |
-| ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Package                                         | npm                                                                                                                                                          | Purpose                                     |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
 | [`@smooai/observability`](packages/core)        | [![npm](https://img.shields.io/npm/v/@smooai/observability?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability)             | Core client — browser + Node universal      |
 | [`@smooai/observability-react`](packages/react) | [![npm](https://img.shields.io/npm/v/@smooai/observability-react?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability-react) | React `<ErrorBoundary>` + `useErrorHandler` |
 | [`@smooai/observability-next`](packages/next)   | [![npm](https://img.shields.io/npm/v/@smooai/observability-next?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability-next)   | Next.js wrapper + sourcemap upload          |
