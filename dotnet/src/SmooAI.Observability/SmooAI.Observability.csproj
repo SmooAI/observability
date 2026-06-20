@@ -1,10 +1,54 @@
 <Project Sdk="Microsoft.NET.Sdk">
-    <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
-        <Nullable>enable</Nullable>
-        <LangVersion>latest</LangVersion>
-        <PackageId>SmooAI.Observability</PackageId>
-        <Version>0.1.0</Version>
-        <Description>SmooAI Observability SDK for .NET — error capture + OTel</Description>
-    </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>SmooAI.Observability</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>SmooAI</Authors>
+    <Company>SmooAI</Company>
+    <Description>Observability SDK for .NET — error capture, breadcrumbs, PII scrubbing, OpenTelemetry traces/metrics export, and GenAI semantic conventions. .NET port of @smooai/observability.</Description>
+    <PackageTags>observability;opentelemetry;error-tracking;otel;genai;smooai</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/SmooAI/observability</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/SmooAI/observability</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OpenTelemetry" Version="1.16.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <!--
+    ASP.NET Core middleware (Middleware/SmooObservabilityMiddleware.cs) needs the
+    framework reference. Only available on the shared-framework TFMs; the SDK
+    core (capture, transport, OTel) works without it on any TFM.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmooAI.Observability.Tests" />
+  </ItemGroup>
+
 </Project>
