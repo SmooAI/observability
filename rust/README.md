@@ -1,9 +1,19 @@
-# `@smooai/observability` — Rust
+# SmooAI Observability — Rust
 
-Rust SDK for SmooAI Observability. Phase 1 (SMOODEV-1158): port the TS
-`Client.captureException` + webhook transport via `reqwest` +
-`tracing-opentelemetry`. Phase 2: axum/tokio framework adapters.
+Rust workspace for the SmooAI Observability SDK.
+
+## Crates
+
+- **[`observability`](observability/)** (`smooai-observability`) — the SDK:
+  error capture, PII scrubbing, batched webhook transport, OpenTelemetry traces
+  + metrics, GenAI semantic-conventions, and M2M auth. At parity with the
+  TypeScript [`@smooai/observability`](../packages/core) reference SDK so Rust
+  services (api-prime, voice, temporal-worker) can self-emit telemetry to
+  `api.smoo.ai`.
+
+See the [crate README](observability/README.md) for usage.
 
 ## Status
 
-🚧 Empty scaffold. Tracking under [SMOODEV-1158](https://smooai.atlassian.net/browse/SMOODEV-1158).
+✅ SDK implemented and tested ([SMOODEV-1158](https://smooai.atlassian.net/browse/SMOODEV-1158)).
+`cargo fmt --check`, `cargo clippy -- -D warnings`, and `cargo test` all green.

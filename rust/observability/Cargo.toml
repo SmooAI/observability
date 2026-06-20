@@ -2,12 +2,38 @@
 name = "smooai-observability"
 version = "0.1.0"
 edition = "2021"
-description = "SmooAI Observability SDK for Rust — error capture + OTel"
+description = "SmooAI Observability SDK for Rust — error capture, PII scrubbing, batched webhook transport, OTLP traces + metrics, GenAI semconv, and M2M auth. Lets downstream Rust services (api-prime, voice, temporal-worker) self-emit telemetry to api.smoo.ai."
+repository = "https://github.com/SmooAI/observability"
 license = "MIT"
+keywords = ["observability", "opentelemetry", "telemetry", "tracing", "smooai"]
+categories = ["development-tools::debugging", "api-bindings"]
+readme = "README.md"
 
 [dependencies]
-reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+# reqwest 0.13 to unify with opentelemetry-http 0.32 (its `reqwest` feature
+# impls HttpClient on reqwest 0.13's Client; a 0.12 pin would be a different type
+# and the impl wouldn't apply).
+reqwest = { version = "0.13", features = ["json", "form", "rustls"], default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
 uuid = { version = "1", features = ["v4"] }
+backtrace = "0.3"
+regex = "1"
+once_cell = "1"
+async-trait = "0.1"
+http = "1"
+bytes = "1"
+thiserror = "2"
+
+# OpenTelemetry — traces + metrics over OTLP/HTTP with JSON payloads so the
+# wire format matches the api.smoo.ai ingest the TS SDK already speaks.
+opentelemetry = { version = "0.32", features = ["trace", "metrics"] }
+opentelemetry_sdk = { version = "0.32", features = ["trace", "metrics", "rt-tokio"] }
+opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "http-json", "reqwest-client"], default-features = false }
+opentelemetry-http = { version = "0.32", features = ["reqwest"], default-features = false }
+opentelemetry-semantic-conventions = "0.32"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }
+wiremock = "0.6"
