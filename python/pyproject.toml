@@ -1,14 +1,30 @@
 [project]
 name = "smooai-observability"
 version = "0.1.0"
-description = "SmooAI Observability SDK — error capture + OTel"
+description = "SmooAI Observability SDK — error capture, PII scrubbing, batched webhook transport, OTLP traces + metrics, and GenAI semantic conventions."
+readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+authors = [{ name = "SmooAI" }]
+keywords = ["observability", "opentelemetry", "telemetry", "error-tracking", "genai", "smooai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Monitoring",
+]
 dependencies = [
     "httpx>=0.27",
     "opentelemetry-api>=1.27",
     "opentelemetry-sdk>=1.27",
 ]
+
+[project.urls]
+Homepage = "https://github.com/SmooAI/observability"
+Repository = "https://github.com/SmooAI/observability"
+Issues = "https://github.com/SmooAI/observability/issues"
 
 [project.optional-dependencies]
 # OTLP/HTTP export of traces + metrics (setup_otel_sdk). Optional so the
