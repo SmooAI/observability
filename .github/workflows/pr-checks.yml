@@ -9,7 +9,52 @@ env:
     FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+    # Cheap change-gate: detect which SDK dirs a PR touches so the heavier
+    # per-language lanes only boot when their language actually changed. This
+    # mirrors the cost-conscious gating used elsewhere in the org — unchanged
+    # languages don't burn a runner.
+    changes:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            ts: ${{ steps.filter.outputs.ts }}
+            rust: ${{ steps.filter.outputs.rust }}
+            go: ${{ steps.filter.outputs.go }}
+            python: ${{ steps.filter.outputs.python }}
+            dotnet: ${{ steps.filter.outputs.dotnet }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: dorny/paths-filter@v3
+              id: filter
+              with:
+                  filters: |
+                      ts:
+                          - 'packages/**'
+                          - 'package.json'
+                          - 'pnpm-lock.yaml'
+                          - 'pnpm-workspace.yaml'
+                          - 'turbo.json'
+                          - 'tsconfig.base.json'
+                          - '.changeset/**'
+                          - '.github/workflows/pr-checks.yml'
+                      rust:
+                          - 'rust/**'
+                          - '.github/workflows/pr-checks.yml'
+                      go:
+                          - 'go/**'
+                          - '.github/workflows/pr-checks.yml'
+                      python:
+                          - 'python/**'
+                          - '.github/workflows/pr-checks.yml'
+                      dotnet:
+                          - 'dotnet/**'
+                          - '.github/workflows/pr-checks.yml'
+
+    # TypeScript lane — unchanged behaviour, now gated on TS-relevant changes.
     validate:
+        needs: changes
+        if: needs.changes.outputs.ts == 'true'
         runs-on: ubuntu-latest
         timeout-minutes: 30
 
@@ -42,3 +87,131 @@ jobs:
 
             - name: Format check
               run: pnpm format:check
+
+    # Rust lane — fmt, clippy (warnings as errors), tests. Manifest in rust/.
+    rust:
+        needs: changes
+        if: needs.changes.outputs.rust == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        defaults:
+            run:
+                working-directory: rust
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: rust -> target
+
+            - name: Format check
+              run: cargo fmt --all --check
+
+            - name: Clippy
+              run: cargo clippy --all-targets --all-features -- -D warnings
+
+            - name: Test
+              run: cargo test --all-features
+
+    # Go lane — gofmt, vet, tests. Module in go/.
+    go:
+        needs: changes
+        if: needs.changes.outputs.go == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        defaults:
+            run:
+                working-directory: go
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: '1.22'
+                  cache-dependency-path: go/go.mod
+
+            - name: Format check
+              run: |
+                  unformatted=$(gofmt -l .)
+                  if [ -n "$unformatted" ]; then
+                      echo "The following files are not gofmt-clean:"
+                      echo "$unformatted"
+                      exit 1
+                  fi
+
+            - name: Vet
+              run: go vet ./...
+
+            - name: Test
+              run: go test ./...
+
+    # Python lane — ruff lint + format, pytest. Package in python/.
+    python:
+        needs: changes
+        if: needs.changes.outputs.python == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        defaults:
+            run:
+                working-directory: python
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install uv
+              uses: astral-sh/setup-uv@v5
+              with:
+                  enable-cache: true
+
+            - name: Set up Python
+              run: uv python install 3.13
+
+            - name: Sync dependencies
+              run: uv sync --all-extras --dev --python 3.13
+
+            # ruff/pytest aren't declared deps yet, so run them via uvx /
+            # `uv run --with` rather than assuming they're in the project env.
+            # Once they're added to a dev group these collapse to `uv run`.
+            - name: Ruff lint
+              run: uvx ruff check .
+
+            - name: Ruff format check
+              run: uvx ruff format --check .
+
+            - name: Test
+              run: uv run --with pytest pytest
+
+    # .NET lane — build, test, format verify. Solution in dotnet/.
+    dotnet:
+        needs: changes
+        if: needs.changes.outputs.dotnet == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        defaults:
+            run:
+                working-directory: dotnet
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  global-json-file: dotnet/global.json
+
+            - name: Restore
+              run: dotnet restore
+
+            - name: Build
+              run: dotnet build --no-restore --configuration Release
+
+            - name: Test
+              run: dotnet test --no-build --configuration Release
+
+            - name: Format verify
+              run: dotnet format --verify-no-changes
