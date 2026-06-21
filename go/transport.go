@@ -1,18 +1,29 @@
 package observability
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/SmooAI/fetch/go/fetch"
 )
 
 // Batched HTTP transport. Holds a bounded queue, flushes on a timer or when
 // MaxBatchSize events are buffered, and retries a failed batch by pushing it
 // back to the front of the queue. Errors are swallowed — observability must
 // never throw into host code. Mirrors the TS Transport.
+//
+// Outbound delivery goes through github.com/SmooAI/fetch/go/fetch (SMOODEV-2026)
+// so each batch POST gets the resilient stack — jittered exponential-backoff
+// retries on 429/5xx + network errors, a per-request timeout, and an optional
+// circuit breaker — instead of a bare net/http call. fetch handles transient
+// blips within a single Flush; the transport's re-queue-on-failure handles
+// longer outages across Flush cycles, so the two retry layers are complementary
+// (fast in-call recovery vs. durable cross-cycle persistence), not duplicative:
+// fetch aborts immediately on 4xx (RetryAbort), matching the old permanent-error
+// behavior, so a persistent client error is not retried twice in a row.
 
 const (
 	defaultFlushMillis = 1000
@@ -26,7 +37,7 @@ type Transport struct {
 	flushInterval time.Duration
 	maxBatch      int
 	maxQueue      int
-	client        *http.Client
+	client        *fetch.Client
 
 	mu       sync.Mutex
 	queue    []ObservabilityEvent
@@ -41,7 +52,8 @@ type TransportOptions struct {
 	FlushInterval time.Duration
 	MaxBatchSize  int
 	MaxQueueSize  int
-	// HTTPClient overrides the default client (test seam).
+	// HTTPClient overrides the underlying *http.Client that the resilient fetch
+	// client drives (test seam). When nil, fetch's default transport is used.
 	HTTPClient *http.Client
 }
 
@@ -59,17 +71,29 @@ func NewTransport(opts TransportOptions) *Transport {
 	if queue <= 0 {
 		queue = defaultQueueMax
 	}
-	client := opts.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
-	}
 	return &Transport{
 		dsn:           opts.DSN,
 		flushInterval: flush,
 		maxBatch:      batch,
 		maxQueue:      queue,
-		client:        client,
+		client:        buildFetchClient(opts.HTTPClient),
 	}
+}
+
+// buildFetchClient assembles the resilient fetch client used for batch delivery.
+// It keeps the prior 10s timeout and JSON content type, adds default retries
+// (429/5xx + network, jittered backoff, aborts on 4xx), and lets a test seam
+// swap the underlying *http.Client.
+func buildFetchClient(httpClient *http.Client) *fetch.Client {
+	retry := fetch.DefaultRetryOptions
+	b := fetch.NewClientBuilder().
+		WithTimeout(10 * time.Second).
+		WithRetry(&retry).
+		WithBaseHeaders(http.Header{"Content-Type": []string{"application/json"}})
+	if httpClient != nil {
+		b = b.WithHTTPClient(httpClient)
+	}
+	return b.Build()
 }
 
 // newTransportFromClientOptions wires a Transport from ClientOptions, used by
@@ -149,21 +173,19 @@ func (t *Transport) Flush(ctx context.Context) error {
 
 func (t *Transport) send(ctx context.Context, batch []ObservabilityEvent) error {
 	payload := IngestPayload{Type: "error", Events: batch}
-	body, err := json.Marshal(payload)
+	// fetch marshals the body to JSON and applies retries/timeout/backoff. It
+	// returns a typed *fetch.HTTPResponseError for non-2xx responses after
+	// retries are exhausted; normalize that to httpStatusError so callers and
+	// tests see the same surface as before.
+	resp, err := fetch.SimplePost(ctx, t.client, t.dsn, payload, nil)
 	if err != nil {
+		var httpErr *fetch.HTTPResponseError
+		if errors.As(err, &httpErr) {
+			return &httpStatusError{status: httpErr.StatusCode}
+		}
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, t.dsn, bytes.NewReader(body))
-	if err != nil {
-		return err
-	}
-	req.Header.Set("content-type", "application/json")
-	resp, err := t.client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode >= 400 {
+	if !resp.OK {
 		return &httpStatusError{status: resp.StatusCode}
 	}
 	return nil
