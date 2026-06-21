@@ -8,6 +8,9 @@
 //! refresh share one in-flight request (a `tokio::sync::Mutex` guards the
 //! refresh so duplicate token exchanges don't churn the rate limiter).
 //!
+//! The token exchange goes through `smooai-fetch` (timeouts + retries + circuit
+//! breaking) rather than raw `reqwest` (SMOODEV-2026).
+//!
 //! Server contract:
 //!
 //! ```text
@@ -21,8 +24,13 @@
 //! ```
 
 use serde::Deserialize;
+use smooai_fetch::defaults::default_retry_options;
+use smooai_fetch::error::FetchError;
+use smooai_fetch::types::{Method, RequestInit};
+use smooai_fetch::{FetchBuilder, FetchClient};
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 
 /// Errors from the token exchange. Callers in the export path log + drop these;
@@ -39,7 +47,9 @@ pub enum TokenError {
     Config(&'static str),
 }
 
-#[derive(Deserialize)]
+// `Clone` is required by smooai-fetch's `FetchClient<T>` bound
+// (`DeserializeOwned + Clone + Send + 'static`).
+#[derive(Deserialize, Clone)]
 struct TokenResponse {
     access_token: Option<String>,
     expires_in: Option<u64>,
@@ -85,7 +95,9 @@ struct Inner {
     client_id: String,
     client_secret: String,
     refresh_window_secs: u64,
-    http: reqwest::Client,
+    // smooai-fetch client typed to the token JSON so a successful exchange parses
+    // straight into `FetchResponse::data`. Carries the 10s timeout + retry policy.
+    http: FetchClient<TokenResponse>,
     cached: Mutex<Option<CachedToken>>,
 }
 
@@ -121,10 +133,10 @@ impl TokenProvider {
         if options.client_secret.is_empty() {
             return Err(TokenError::Config("clientSecret"));
         }
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .map_err(|e| TokenError::Http(e.to_string()))?;
+        let http = FetchBuilder::<TokenResponse>::new()
+            .with_timeout(10_000)
+            .with_retry(default_retry_options())
+            .build();
         Ok(TokenProvider {
             inner: Arc::new(Inner {
                 auth_url: options.auth_url.trim_end_matches('/').to_string(),
@@ -169,43 +181,80 @@ impl TokenProvider {
     }
 
     async fn refresh(&self) -> Result<CachedToken, TokenError> {
-        let res = self
+        // smooai-fetch's `RequestInit` takes a pre-serialized String body, so
+        // build the `application/x-www-form-urlencoded` payload by hand. Each
+        // value is percent-encoded (the `client_secret` can contain reserved
+        // characters); the keys are all token-safe literals.
+        let body = format!(
+            "grant_type=client_credentials&provider=client_credentials&client_id={}&client_secret={}",
+            form_encode(&self.inner.client_id),
+            form_encode(&self.inner.client_secret),
+        );
+
+        let mut headers = HashMap::new();
+        headers.insert(
+            "content-type".to_string(),
+            "application/x-www-form-urlencoded".to_string(),
+        );
+
+        let resp = self
             .inner
             .http
-            .post(format!("{}/token", self.inner.auth_url))
-            .header("Content-Type", "application/x-www-form-urlencoded")
-            .form(&[
-                ("grant_type", "client_credentials"),
-                ("provider", "client_credentials"),
-                ("client_id", self.inner.client_id.as_str()),
-                ("client_secret", self.inner.client_secret.as_str()),
-            ])
-            .send()
+            .fetch(
+                &format!("{}/token", self.inner.auth_url),
+                RequestInit {
+                    method: Method::POST,
+                    headers,
+                    body: Some(body),
+                },
+            )
             .await
-            .map_err(|e| TokenError::Http(e.to_string()))?;
+            .map_err(token_error_from_fetch)?;
 
-        let status = res.status();
-        if !status.is_success() {
-            let body = res
-                .text()
-                .await
-                .unwrap_or_else(|_| "<unreadable>".to_string());
-            return Err(TokenError::Status {
-                status: status.as_u16(),
-                body,
-            });
-        }
-        let body: TokenResponse = res
-            .json()
-            .await
-            .map_err(|e| TokenError::Http(e.to_string()))?;
-        let access_token = body.access_token.ok_or(TokenError::NoAccessToken)?;
-        let expires_in = body.expires_in.unwrap_or(3600);
+        // 2xx only reaches here (non-2xx is an `Err` from `fetch`). The typed
+        // client parsed the JSON into `resp.data`.
+        let parsed = resp.data.ok_or(TokenError::NoAccessToken)?;
+        let access_token = parsed.access_token.ok_or(TokenError::NoAccessToken)?;
+        let expires_in = parsed.expires_in.unwrap_or(3600);
         Ok(CachedToken {
             access_token,
             expires_at: now_secs() + expires_in,
         })
     }
+}
+
+/// Map a [`FetchError`] onto a [`TokenError`]. A non-2xx response surfaces as
+/// `TokenError::Status` (preserving the upstream status + body); everything else
+/// (timeout, transport, exhausted retries) folds into `TokenError::Http`. The
+/// retry loop wraps the final failure in `FetchError::Retry`, so unwrap one level
+/// to recover an underlying `HttpResponse` status.
+fn token_error_from_fetch(err: FetchError) -> TokenError {
+    let unwrapped = match &err {
+        FetchError::Retry { source, .. } => source.as_ref(),
+        other => other,
+    };
+    match unwrapped {
+        FetchError::HttpResponse { status, body, .. } => TokenError::Status {
+            status: *status,
+            body: body.clone(),
+        },
+        _ => TokenError::Http(err.to_string()),
+    }
+}
+
+/// Minimal `application/x-www-form-urlencoded` value encoder: percent-encodes
+/// everything outside the RFC 3986 unreserved set (`A-Z a-z 0-9 - . _ ~`).
+fn form_encode(value: &str) -> String {
+    let mut out = String::with_capacity(value.len());
+    for byte in value.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
 }
 
 fn now_secs() -> u64 {
