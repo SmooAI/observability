@@ -99,6 +99,62 @@ public class TransportTests
         Assert.Throws<ArgumentException>(() => new Transport(new TransportOptions { Dsn = "" }));
     }
 
+    // --- Default transport (SmooFetch) path ----------------------------------
+    //
+    // The default Transport (no caller-supplied HttpClient) delivers through
+    // SmooFetch, which owns its own real HttpClient and cannot accept a stub
+    // handler. These tests exercise it end-to-end against a loopback HTTP server
+    // so the SmooFetch retry/timeout/circuit-breaking pipeline is the code under
+    // test, not a mock.
+
+    [Fact]
+    public async Task DefaultTransport_DeliversBatchViaSmooFetch()
+    {
+        using var server = new LoopbackServer(_ => HttpStatusCode.OK);
+        await using var transport = new Transport(new TransportOptions { Dsn = server.Url });
+
+        transport.Enqueue(NewEvent("a"));
+        transport.Enqueue(NewEvent("b"));
+        await transport.FlushAsync();
+
+        await WaitFor(() => server.RequestCount >= 1);
+        Assert.Equal(1, server.RequestCount);
+        Assert.Contains("\"type\":\"error\"", server.LastBody);
+        Assert.Contains("\"eventId\":\"a\"", server.LastBody);
+        Assert.Equal(0, transport.QueueSize);
+    }
+
+    [Fact]
+    public async Task DefaultTransport_RequeuesAfterRetriesExhausted()
+    {
+        // Always 500: SmooFetch retries within the flush, then PostAsync reports
+        // a failed delivery and the batch is requeued.
+        using var server = new LoopbackServer(_ => HttpStatusCode.InternalServerError);
+        await using var transport = new Transport(
+            new TransportOptions { Dsn = server.Url, MaxRetries = 1 });
+
+        transport.Enqueue(NewEvent("a"));
+        await transport.FlushAsync();
+
+        Assert.Equal(1, transport.QueueSize);
+        // Initial attempt + 1 retry = 2 requests reached the server.
+        Assert.True(server.RequestCount >= 2, $"expected >=2 requests, saw {server.RequestCount}");
+    }
+
+    [Fact]
+    public async Task DefaultTransport_RequeuesWhenEndpointUnreachable()
+    {
+        // Reserve and immediately release a port so connections are refused.
+        var url = LoopbackServer.ReserveUnusedUrl();
+        await using var transport = new Transport(
+            new TransportOptions { Dsn = url, MaxRetries = 0, RequestTimeout = TimeSpan.FromSeconds(2) });
+
+        transport.Enqueue(NewEvent("a"));
+        await transport.FlushAsync(); // must not throw
+
+        Assert.Equal(1, transport.QueueSize);
+    }
+
     private static async Task WaitFor(Func<bool> condition, int timeoutMs = 2000)
     {
         var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
