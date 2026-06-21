@@ -10,20 +10,20 @@ categories = ["development-tools::debugging", "api-bindings"]
 readme = "README.md"
 
 [dependencies]
-# `smooai-fetch` wraps reqwest with timeouts + retries + circuit-breaking; the
-# SDK's own app-style outbound HTTP (M2M token exchange in `auth.rs`, the batched
-# webhook POST in `transport.rs`) goes through it so those calls inherit the
-# resilience policy every other SmooAI client uses (SMOODEV-2026).
+# `smooai-fetch` wraps reqwest with timeouts + retries + circuit-breaking. ALL of
+# this SDK's outbound HTTP goes through it: the M2M token exchange (`auth.rs`), the
+# batched webhook POST (`transport.rs`), AND the OTLP trace + metric export
+# (`otel/auth_client.rs`, via a smooai-fetch-backed `opentelemetry_http::HttpClient`
+# adapter) — so every call inherits the resilience policy every other SmooAI client
+# uses (SMOODEV-2026, SMOODEV-2029). smooai-fetch pulls reqwest transitively.
 smooai-fetch = "3"
-# reqwest 0.13 stays for two reasons: (1) the OTLP exporter's auth-injecting
-# client in `otel.rs` is coupled to `opentelemetry-http`'s `HttpClient` trait,
-# which is impl'd for `reqwest::Client` — smooai-fetch doesn't impl that trait, and
-# that path is the OTLP protocol transport, not an app call; (2) the
-# `reqwest-middleware` feature IS the reqwest integration for downstream reqwest
-# users. It also remains a transitive dep of smooai-fetch. 0.13 unifies with
-# opentelemetry-http 0.32 (a 0.12 pin would be a different `Client` type and the
-# trait impl wouldn't apply).
-reqwest = { version = "0.13", features = ["json", "form", "rustls"], default-features = false }
+# reqwest is now needed ONLY by the optional `reqwest-middleware` integration —
+# the client-span middleware in `reqwest_mw.rs` IS the reqwest integration for
+# downstream reqwest users. No code path in the default build references reqwest
+# directly (the OTLP exporter transport moved to smooai-fetch in SMOODEV-2029), so
+# the dep is feature-gated to keep the default build from pulling reqwest as a
+# DIRECT dependency. (It still arrives transitively through smooai-fetch.)
+reqwest = { version = "0.13", features = ["json", "form", "rustls"], default-features = false, optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "sync", "time"] }
@@ -38,10 +38,19 @@ thiserror = "2"
 
 # OpenTelemetry — traces + metrics over OTLP/HTTP with JSON payloads so the
 # wire format matches the api.smoo.ai ingest the TS SDK already speaks.
+# The exporter's HTTP transport is supplied explicitly via `.with_http_client(...)`
+# (a smooai-fetch-backed `opentelemetry_http::HttpClient`), so we do NOT enable any
+# of opentelemetry-otlp's built-in HTTP clients (`reqwest-client` etc.) — the
+# explicit client always wins and the default-client code is never compiled in.
+# `experimental-http-retry` is deliberately OFF: smooai-fetch owns transport retry,
+# so leaving the exporter's retry feature off prevents double-retry (SMOODEV-2029).
+# opentelemetry-http is pulled with no features — we only need the `HttpClient`
+# trait to implement it ourselves (the `reqwest` feature, which impls it for
+# reqwest::Client, is no longer used).
 opentelemetry = { version = "0.32", features = ["trace", "metrics"] }
 opentelemetry_sdk = { version = "0.32", features = ["trace", "metrics", "rt-tokio"] }
-opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "http-json", "reqwest-client"], default-features = false }
-opentelemetry-http = { version = "0.32", features = ["reqwest"], default-features = false }
+opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "http-json"], default-features = false }
+opentelemetry-http = { version = "0.32", default-features = false }
 opentelemetry-semantic-conventions = "0.32"
 
 # --- Optional HTTP framework instrumentation (feature-gated, default off) -----
@@ -58,8 +67,10 @@ reqwest-middleware = { version = "0.5", optional = true }
 default = []
 # OTel server-span layer for Tower/Axum services.
 tower = ["dep:tower-layer", "dep:tower-service", "dep:pin-project-lite"]
-# OTel client-span middleware for reqwest.
-reqwest-middleware = ["dep:reqwest-middleware"]
+# OTel client-span middleware for reqwest. Pulls reqwest as a DIRECT dep (the
+# only thing in this crate that needs it directly — the OTLP transport is on
+# smooai-fetch as of SMOODEV-2029).
+reqwest-middleware = ["dep:reqwest-middleware", "dep:reqwest"]
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }

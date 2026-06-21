@@ -7,12 +7,18 @@
 //!     so a refreshed token starts being used on the next export with no
 //!     exporter restart. This sidesteps the header-snapshot staleness that bit
 //!     the TS SDK (SMOODEV-1206) and applies here too: the OTLP exporter holds
-//!     its `reqwest::Client` + headers for the life of the process.
+//!     its HTTP client + headers for the life of the process.
 //!
 //! The per-request mode is implemented with a custom [`opentelemetry_http::HttpClient`]
 //! wrapper ([`AuthInjectingHttpClient`]) that asks the `TokenProvider` for a
 //! fresh token, sets the `Authorization` header, and on a 401 invalidates +
-//! retries once before delegating to an inner `reqwest` client.
+//! retries once. The OTLP protocol transport itself runs over `smooai-fetch`
+//! (timeouts + retries + circuit breaking) rather than raw `reqwest`, so the
+//! export path inherits the same resilience policy every other SmooAI outbound
+//! call uses (SMOODEV-2029). smooai-fetch owns transport retry; the exporter
+//! layer doesn't retry because this crate leaves opentelemetry-otlp's
+//! `experimental-http-retry` feature off (see `auth_client.rs` for the no-double-
+//! retry rationale).
 //!
 //! Wire format is OTLP/HTTP/JSON (`http-json` feature) so the bytes match what
 //! the TS `AuthInjectingTraceExporter` POSTs.
@@ -177,13 +183,13 @@ fn build_and_install(options: SetupOtelOptions) -> OtelSdkHandle {
     }
 }
 
-/// Build the auth-injecting reqwest client wrapper shared by both exporters.
+/// Per-export HTTP timeout baked into the smooai-fetch client backing the OTLP
+/// exporter. Matches the 10s the previous raw-reqwest client used.
+const OTLP_EXPORT_TIMEOUT_MS: u64 = 10_000;
+
+/// Build the auth-injecting smooai-fetch HTTP client shared by both exporters.
 fn build_http_client(options: &SetupOtelOptions) -> AuthInjectingHttpClient {
-    let inner = reqwest::Client::builder()
-        .timeout(Duration::from_secs(10))
-        .build()
-        .unwrap_or_default();
-    AuthInjectingHttpClient::new(inner, options.token_provider.clone())
+    AuthInjectingHttpClient::new(OTLP_EXPORT_TIMEOUT_MS, options.token_provider.clone())
 }
 
 fn build_span_exporter(options: &SetupOtelOptions) -> Option<SpanExporter> {
