@@ -1,3 +1,4 @@
+import smooFetch from '@smooai/fetch';
 import { Transport } from '../transport';
 import type { ClientOptions } from '../types';
 
@@ -11,10 +12,15 @@ import type { ClientOptions } from '../types';
  * SMOODEV-1148: this gets registered in Node init so `Client.captureException`
  * fans out to BOTH the OTel-native captureHandler (span events) AND the
  * webhook POST (errorEvents table → Errors dashboard).
+ *
+ * SMOODEV-2026: the batch flush goes through `@smooai/fetch` (node entry)
+ * so webhook delivery gets exponential-backoff retries, timeouts, and
+ * circuit-breaking for free.
  */
 export function makeNodeTransport(opts: ClientOptions): Transport {
     const adapter = {
         canBeacon: false,
+        fetcher: smooFetch,
     };
     return new Transport(
         {
