@@ -36,6 +36,11 @@ otlp = [
 fastapi = [
     "starlette>=0.37",
 ]
+# LangChain / LangGraph callback handler emitting GenAI spans. Only langchain-core
+# is needed — the handler subclasses BaseCallbackHandler and reads run metadata.
+langchain = [
+    "langchain-core>=0.3",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -52,6 +57,7 @@ dev = [
     "ruff>=0.11.6,<0.12",
     "opentelemetry-exporter-otlp-proto-http>=1.27",
     "starlette>=0.37",
+    "langchain-core>=0.3",
 ]
 
 [tool.poe.tasks.install-dev]
