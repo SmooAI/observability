@@ -203,6 +203,17 @@ func buildResource(opts SetupOtelOptions) *resource.Resource {
 
 // buildHTTPClient returns the custom-auth HTTP client when a TokenProvider is
 // set, the caller's override, or nil to let the exporter use its default.
+//
+// SMOODEV-2026 note: the OTLP/HTTP exporters are deliberately left on plain
+// net/http rather than routed through github.com/SmooAI/fetch/go/fetch. The
+// otlptracehttp/otlpmetrichttp exporters only accept a *http.Client (via
+// WithHTTPClient) and speak protobuf, while fetch is a generics-over-JSON client
+// that exposes no http.RoundTripper adapter — there is no clean seam to drive
+// the protobuf export through fetch's resilient pipeline without re-implementing
+// the exporter transport. The exporters already carry their own sane retry
+// (otlptracehttp.WithRetry, on by default with backoff), so wrapping them in
+// fetch would also double the retry layer. Only the webhook batch transport
+// (transport.go) was migrated to fetch. Revisit if fetch grows a RoundTripper.
 func buildHTTPClient(opts SetupOtelOptions) *http.Client {
 	if opts.TokenProvider == nil && opts.HTTPClient == nil {
 		return nil

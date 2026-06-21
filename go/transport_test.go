@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -105,6 +106,55 @@ func TestFlushEmptyNoop(t *testing.T) {
 	tr := NewTransport(TransportOptions{DSN: "http://127.0.0.1:0"})
 	if err := tr.Flush(context.Background()); err != nil {
 		t.Errorf("empty flush returned error: %v", err)
+	}
+}
+
+// TestTransportFetchInCallRetry verifies the resilient fetch stack retries a
+// transient 5xx within a single send/Flush (SMOODEV-2026) — the first attempt
+// 500s, fetch backs off and retries, and the batch lands without ever needing
+// the transport's slower re-queue path. queueSize stays 0 after the flush.
+func TestTransportFetchInCallRetry(t *testing.T) {
+	var hits int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&hits, 1) == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	tr := NewTransport(TransportOptions{DSN: srv.URL, MaxBatchSize: 1})
+	tr.Enqueue(ObservabilityEvent{EventID: "1"}) // full batch -> synchronous Flush
+
+	// fetch retried the 500 in-call and succeeded, so the server saw >= 2 hits
+	// and the queue drained without a re-queue.
+	waitFor(t, func() bool { return atomic.LoadInt32(&hits) >= 2 })
+	waitFor(t, func() bool { return tr.queueSize() == 0 })
+}
+
+// TestTransportSendErrorOnPersistent4xx confirms a persistent client error
+// surfaces as httpStatusError (fetch aborts retries on 4xx) so Flush re-queues
+// the batch rather than dropping it.
+func TestTransportSendErrorOnPersistent4xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer srv.Close()
+
+	tr := NewTransport(TransportOptions{DSN: srv.URL, MaxBatchSize: 10})
+	tr.Enqueue(ObservabilityEvent{EventID: "1"})
+	err := tr.Flush(context.Background())
+	var statusErr *httpStatusError
+	if !errors.As(err, &statusErr) {
+		t.Fatalf("expected *httpStatusError, got %v", err)
+	}
+	if statusErr.status != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", statusErr.status)
+	}
+	// Batch was re-queued for a later attempt, not dropped.
+	if tr.queueSize() != 1 {
+		t.Errorf("queue size = %d, want 1 (re-queued)", tr.queueSize())
 	}
 }
 
