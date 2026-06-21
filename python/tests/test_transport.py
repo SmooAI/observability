@@ -2,6 +2,8 @@ import threading
 import time
 
 import httpx
+from smooai_fetch import FetchOptions, FetchResponse
+from smooai_fetch._errors import HTTPResponseError
 
 from smooai_observability.transport import Transport
 from smooai_observability.types import ObservabilityEvent, Sdk
@@ -17,30 +19,36 @@ def _event(i: int) -> ObservabilityEvent:
     )
 
 
-class _RecordingTransport:
-    """Captures POSTed payloads via an httpx MockTransport."""
+def _ok_response(url: str) -> FetchResponse:
+    """A minimal successful FetchResponse, as smooai-fetch would return."""
+    return FetchResponse(response=httpx.Response(200, request=httpx.Request("POST", url)))
+
+
+class _RecordingFetch:
+    """Captures the bodies POSTed through an injected smooai-fetch stub.
+
+    smooai-fetch constructs its own ``httpx.AsyncClient`` internally and exposes
+    no client-injection seam, so the transport takes an injectable ``fetch_fn``
+    and tests substitute this stub.
+    """
 
     def __init__(self):
-        self.payloads: list[dict] = []
+        self.bodies: list[dict] = []
         self.lock = threading.Lock()
         self.event = threading.Event()
 
-        def handler(request: httpx.Request) -> httpx.Response:
-            with self.lock:
-                import json
-
-                self.payloads.append(json.loads(request.content))
-            self.event.set()
-            return httpx.Response(200, json={"ok": True})
-
-        self.client = httpx.Client(transport=httpx.MockTransport(handler))
+    async def __call__(self, url: str, options: FetchOptions) -> FetchResponse:
+        with self.lock:
+            self.bodies.append(options.body)
+        self.event.set()
+        return _ok_response(url)
 
 
 def test_transport_batches_and_posts():
-    rec = _RecordingTransport()
+    rec = _RecordingFetch()
     t = Transport(
         "https://example.test/webhook",
-        client=rec.client,
+        fetch_fn=rec,
         flush_interval_ms=50,
         max_batch_size=5,
     )
@@ -51,18 +59,18 @@ def test_transport_batches_and_posts():
         assert rec.event.wait(2.0), "transport never flushed"
         time.sleep(0.1)
         with rec.lock:
-            all_events = [e for p in rec.payloads for e in p["events"]]
+            all_events = [e for body in rec.bodies for e in body["events"]]
         assert len(all_events) == 3
-        assert rec.payloads[0]["type"] == "error"
+        assert rec.bodies[0]["type"] == "error"
     finally:
         t.shutdown()
 
 
 def test_transport_flush_on_full_batch():
-    rec = _RecordingTransport()
+    rec = _RecordingFetch()
     t = Transport(
         "https://example.test/webhook",
-        client=rec.client,
+        fetch_fn=rec,
         flush_interval_ms=10_000,  # long, so only batch-size triggers flush
         max_batch_size=3,
     )
@@ -75,10 +83,10 @@ def test_transport_flush_on_full_batch():
 
 
 def test_transport_drops_oldest_on_overflow():
-    rec = _RecordingTransport()
+    rec = _RecordingFetch()
     t = Transport(
         "https://example.test/webhook",
-        client=rec.client,
+        fetch_fn=rec,
         flush_interval_ms=10_000,
         max_batch_size=1000,
         max_queue_size=5,
@@ -92,21 +100,27 @@ def test_transport_drops_oldest_on_overflow():
 
 
 def test_transport_retries_on_failure():
+    """smooai-fetch raises on non-2xx (after its own retries); the transport
+    requeues the failed batch and re-sends it on the next flush tick."""
     state = {"calls": 0}
     flushed = threading.Event()
+    lock = threading.Lock()
 
-    def handler(request: httpx.Request) -> httpx.Response:
-        state["calls"] += 1
-        if state["calls"] == 1:
-            return httpx.Response(500)
+    async def fetch_fn(url: str, options: FetchOptions) -> FetchResponse:
+        with lock:
+            state["calls"] += 1
+            n = state["calls"]
+        if n == 1:
+            # Mirror smooai-fetch surfacing a non-2xx after exhausting retries.
+            raise HTTPResponseError(httpx.Response(500, request=httpx.Request("POST", url)))
         flushed.set()
-        return httpx.Response(200)
+        return _ok_response(url)
 
-    client = httpx.Client(transport=httpx.MockTransport(handler))
-    t = Transport("https://example.test/webhook", client=client, flush_interval_ms=50, max_batch_size=100)
+    t = Transport("https://example.test/webhook", fetch_fn=fetch_fn, flush_interval_ms=50, max_batch_size=100)
     try:
         t.enqueue(_event(0))
         assert flushed.wait(3.0), "retry never succeeded"
-        assert state["calls"] >= 2
+        with lock:
+            assert state["calls"] >= 2
     finally:
         t.shutdown()

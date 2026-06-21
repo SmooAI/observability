@@ -3,7 +3,9 @@ name = "smooai-observability"
 version = "0.1.0"
 description = "SmooAI Observability SDK — error capture, PII scrubbing, batched webhook transport, OTLP traces + metrics, and GenAI semantic conventions."
 readme = "README.md"
-requires-python = ">=3.10"
+# Bumped from >=3.10 to >=3.12: the webhook transport now depends on
+# smooai-fetch, which requires Python >=3.12 (SMOODEV-2026).
+requires-python = ">=3.12"
 license = "MIT"
 authors = [{ name = "SmooAI" }]
 keywords = ["observability", "opentelemetry", "telemetry", "error-tracking", "genai", "smooai"]
@@ -16,6 +18,11 @@ classifiers = [
     "Topic :: System :: Monitoring",
 ]
 dependencies = [
+    # Webhook event delivery goes through smooai-fetch (retries/timeouts/circuit
+    # breaking) — SMOODEV-2026.
+    "smooai-fetch>=2.1",
+    # httpx is still used directly by the OAuth token provider (auth/token_provider.py),
+    # which backs the OTLP exporter path. It is also smooai-fetch's underlying client.
     "httpx>=0.27",
     "opentelemetry-api>=1.27",
     "opentelemetry-sdk>=1.27",
@@ -85,7 +92,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 160
-target-version = "py310"
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]

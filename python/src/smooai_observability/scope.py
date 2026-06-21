@@ -131,7 +131,7 @@ def with_scope() -> Iterator[Scope]:
         _current_scope.reset(token)
 
 
-def run_with_scope(fn: Callable[[Scope], T]) -> T:
+def run_with_scope[T](fn: Callable[[Scope], T]) -> T:
     """Functional form of ``with_scope`` — mirrors the TS ``withScope(fn)``
     signature for callers that prefer a callback."""
     with with_scope() as scope:
