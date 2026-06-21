@@ -34,6 +34,23 @@ opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "http-j
 opentelemetry-http = { version = "0.32", features = ["reqwest"], default-features = false }
 opentelemetry-semantic-conventions = "0.32"
 
+# --- Optional HTTP framework instrumentation (feature-gated, default off) -----
+# `tower` feature: a tower::Layer wrapping any http Service (incl. Axum routers)
+# that opens a server span per request on the global tracer.
+tower-layer = { version = "0.3", optional = true }
+tower-service = { version = "0.3", optional = true }
+pin-project-lite = { version = "0.2", optional = true }
+# `reqwest-middleware` feature: a client-span middleware for outbound calls.
+# 0.5 supports reqwest 0.13 (this crate's pin).
+reqwest-middleware = { version = "0.5", optional = true }
+
+[features]
+default = []
+# OTel server-span layer for Tower/Axum services.
+tower = ["dep:tower-layer", "dep:tower-service", "dep:pin-project-lite"]
+# OTel client-span middleware for reqwest.
+reqwest-middleware = ["dep:reqwest-middleware"]
+
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }
 wiremock = "0.6"
