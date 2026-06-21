@@ -149,8 +149,20 @@ where
             .unwrap_or_else(|| req.uri().path().to_owned());
         let protocol = http_version_str(req.version());
 
+        // Extract any upstream W3C trace context (traceparent/tracestate) the
+        // caller injected into the request headers. When present, the server
+        // span we open below CONTINUES that trace (parents off the remote span)
+        // instead of starting a disconnected root — this is what links traces
+        // across service hops. With no traceparent header (or no propagator
+        // installed) this yields an empty context and the span becomes a fresh
+        // root, exactly as before. (SMOODEV-2024)
+        let parent_cx = opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.extract(&opentelemetry_http::HeaderExtractor(req.headers()))
+        });
+
         // Open a server span on the GLOBAL tracer (the one setup_otel_sdk
         // installed). If no provider is installed it's a cheap no-op span.
+        // `with_parent_context` ties it to the extracted upstream context.
         let tracer = opentelemetry::global::tracer(TRACER_NAME);
         let span: BoxedSpan = tracer
             .span_builder(format!("{method} {route}"))
@@ -160,7 +172,7 @@ where
                 KeyValue::new("url.path", req.uri().path().to_owned()),
                 KeyValue::new("network.protocol.version", protocol),
             ])
-            .start(&tracer);
+            .start_with_context(&tracer, &parent_cx);
 
         // Build the request context that holds the server span. The inner
         // service is called WITHOUT the context attached here — `ResponseFuture`
@@ -326,5 +338,65 @@ mod tests {
     fn http_version_strings() {
         assert_eq!(http_version_str(http::Version::HTTP_11), "1.1");
         assert_eq!(http_version_str(http::Version::HTTP_2), "2");
+    }
+
+    // --- W3C trace context propagation (SMOODEV-2024) ----------------------
+
+    use opentelemetry::propagation::TextMapPropagator;
+    use opentelemetry::trace::{SpanContext, TraceState};
+    use opentelemetry::{SpanId, TraceFlags, TraceId};
+    use opentelemetry_sdk::propagation::TraceContextPropagator;
+
+    #[test]
+    fn inject_extract_round_trip_preserves_trace_id() {
+        let propagator = TraceContextPropagator::new();
+
+        let trace_id = TraceId::from_hex("0af7651916cd43dd8448eb211c80319c").unwrap();
+        let span_id = SpanId::from_hex("b7ad6b7169203331").unwrap();
+        let sc = SpanContext::new(
+            trace_id,
+            span_id,
+            TraceFlags::SAMPLED,
+            true,
+            TraceState::default(),
+        );
+        let cx = Context::new().with_remote_span_context(sc);
+
+        // Inject into a fresh HeaderMap (the outbound side).
+        let mut headers = http::HeaderMap::new();
+        propagator.inject_context(&cx, &mut opentelemetry_http::HeaderInjector(&mut headers));
+
+        // Extract it back out (the inbound side, as the tower layer does).
+        let extracted = propagator.extract(&opentelemetry_http::HeaderExtractor(&headers));
+        let extracted_sc = extracted.span().span_context().clone();
+
+        assert!(extracted_sc.is_valid(), "extracted context is valid");
+        assert_eq!(
+            extracted_sc.trace_id(),
+            trace_id,
+            "trace_id survives the round-trip"
+        );
+        assert_eq!(
+            extracted_sc.span_id(),
+            span_id,
+            "parent span_id survives the round-trip"
+        );
+        assert!(
+            extracted_sc.is_remote(),
+            "extracted context is marked remote"
+        );
+    }
+
+    #[test]
+    fn extract_with_no_headers_yields_invalid_context() {
+        let propagator = TraceContextPropagator::new();
+        let headers = http::HeaderMap::new();
+        let extracted = propagator.extract(&opentelemetry_http::HeaderExtractor(&headers));
+        // With no traceparent header the extracted span context is invalid, so
+        // the server span the layer opens becomes a fresh root.
+        assert!(
+            !extracted.span().span_context().is_valid(),
+            "no headers -> invalid (empty) span context"
+        );
     }
 }

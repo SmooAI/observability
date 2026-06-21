@@ -131,6 +131,17 @@ fn build_resource(options: &SetupOtelOptions) -> Resource {
 }
 
 fn build_and_install(options: SetupOtelOptions) -> OtelSdkHandle {
+    // Install the global W3C Trace Context propagator so traceparent/tracestate
+    // headers are injected on outbound calls and extracted on inbound ones (see
+    // the `tower` / `reqwest-middleware` integrations). This is always-on and
+    // cheap — it just registers the text-map propagator the integrations consult
+    // via `opentelemetry::global::get_text_map_propagator`. Without it that
+    // global defaults to a no-op propagator and traces never link across
+    // services. (SMOODEV-2024)
+    opentelemetry::global::set_text_map_propagator(
+        opentelemetry_sdk::propagation::TraceContextPropagator::new(),
+    );
+
     let resource = build_resource(&options);
 
     let tracer_provider = match build_span_exporter(&options) {
