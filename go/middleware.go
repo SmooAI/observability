@@ -13,9 +13,9 @@ import (
 //     exceptions (status 500) before re-panicking so the host's own recovery
 //     can still run.
 //
-// Fiber / Gin / Echo integrations are deferred — see the gap note in the README.
-// They can be written as thin adapters over the same Scope + CaptureException
-// primitives.
+// Fiber and Gin integrations live in their own modules (go/fiber, go/gin) as
+// thin adapters over the same Scope + CaptureException primitives. Echo is still
+// deferred — see the gap note in the README.
 
 // MiddlewareOptions configures Middleware.
 type MiddlewareOptions struct {
