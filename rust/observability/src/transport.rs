@@ -8,9 +8,18 @@
 //! Errors are swallowed — observability must never throw into host code. On a
 //! failed flush the batch is pushed back to the FRONT of the queue for the next
 //! attempt (matching the TS `queue.unshift(...batch)` retry behavior).
+//!
+//! The webhook POST goes through `smooai-fetch` (timeouts + retries + circuit
+//! breaking) rather than raw `reqwest` (SMOODEV-2026). smooai-fetch already
+//! retries 429/5xx internally; the queue requeue here covers transport failures
+//! and the post-retry surface so a permanently-failing endpoint still re-tries on
+//! the next flush tick.
 
 use crate::types::{IngestPayload, IngestType, ObservabilityEvent};
-use std::collections::VecDeque;
+use smooai_fetch::defaults::default_retry_options;
+use smooai_fetch::types::{Method, RequestInit};
+use smooai_fetch::{FetchBuilder, FetchClient};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
@@ -46,7 +55,9 @@ impl TransportOptions {
 
 struct TransportInner {
     opts: TransportOptions,
-    http: reqwest::Client,
+    // The webhook response body is ignored (we only care about success/failure),
+    // so the client is typed to `serde_json::Value`.
+    http: FetchClient<serde_json::Value>,
     queue: Mutex<VecDeque<ObservabilityEvent>>,
 }
 
@@ -75,10 +86,10 @@ impl Transport {
     /// Build a transport and spawn its background flush loop. Requires a tokio
     /// runtime (the loop is a spawned task).
     pub fn new(opts: TransportOptions) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
+        let http = FetchBuilder::<serde_json::Value>::new()
+            .with_timeout(10_000)
+            .with_retry(default_retry_options())
+            .build();
         let inner = Arc::new(TransportInner {
             opts: opts.clone(),
             http,
@@ -154,26 +165,46 @@ async fn flush_inner(inner: &Arc<TransportInner>) {
         events: batch.clone(),
     };
 
+    // Serialize the payload by hand — smooai-fetch's `RequestInit` takes a String
+    // body. A serialization failure can't realistically happen for our types, but
+    // if it did we treat it as a failed flush and requeue.
+    let Ok(body) = serde_json::to_string(&payload) else {
+        requeue(inner, batch).await;
+        return;
+    };
+
+    let mut headers = HashMap::new();
+    headers.insert("content-type".to_string(), "application/json".to_string());
+
+    // smooai-fetch returns `Err` on non-2xx (after its own 429/5xx retries) and on
+    // transport/timeout errors — exactly the cases we want to requeue.
     let result = inner
         .http
-        .post(&inner.opts.dsn)
-        .header("content-type", "application/json")
-        .json(&payload)
-        .send()
+        .fetch(
+            &inner.opts.dsn,
+            RequestInit {
+                method: Method::POST,
+                headers,
+                body: Some(body),
+            },
+        )
         .await;
 
-    let ok = matches!(result, Ok(ref res) if res.status().is_success());
-    if !ok {
-        // Push the batch back to the FRONT for the next attempt (matches the TS
-        // `queue.unshift(...batch)`). Bounded by max_queue_size so a permanently
-        // failing endpoint can't grow memory without limit.
-        let mut q = inner.queue.lock().await;
-        for event in batch.into_iter().rev() {
-            if q.len() >= inner.opts.max_queue_size {
-                q.pop_back();
-            }
-            q.push_front(event);
+    if result.is_err() {
+        requeue(inner, batch).await;
+    }
+}
+
+/// Push a failed batch back to the FRONT of the queue for the next attempt
+/// (matches the TS `queue.unshift(...batch)`). Bounded by `max_queue_size` so a
+/// permanently failing endpoint can't grow memory without limit.
+async fn requeue(inner: &Arc<TransportInner>, batch: Vec<ObservabilityEvent>) {
+    let mut q = inner.queue.lock().await;
+    for event in batch.into_iter().rev() {
+        if q.len() >= inner.opts.max_queue_size {
+            q.pop_back();
         }
+        q.push_front(event);
     }
 }
 

@@ -10,9 +10,19 @@ categories = ["development-tools::debugging", "api-bindings"]
 readme = "README.md"
 
 [dependencies]
-# reqwest 0.13 to unify with opentelemetry-http 0.32 (its `reqwest` feature
-# impls HttpClient on reqwest 0.13's Client; a 0.12 pin would be a different type
-# and the impl wouldn't apply).
+# `smooai-fetch` wraps reqwest with timeouts + retries + circuit-breaking; the
+# SDK's own app-style outbound HTTP (M2M token exchange in `auth.rs`, the batched
+# webhook POST in `transport.rs`) goes through it so those calls inherit the
+# resilience policy every other SmooAI client uses (SMOODEV-2026).
+smooai-fetch = "3"
+# reqwest 0.13 stays for two reasons: (1) the OTLP exporter's auth-injecting
+# client in `otel.rs` is coupled to `opentelemetry-http`'s `HttpClient` trait,
+# which is impl'd for `reqwest::Client` — smooai-fetch doesn't impl that trait, and
+# that path is the OTLP protocol transport, not an app call; (2) the
+# `reqwest-middleware` feature IS the reqwest integration for downstream reqwest
+# users. It also remains a transitive dep of smooai-fetch. 0.13 unifies with
+# opentelemetry-http 0.32 (a 0.12 pin would be a different `Client` type and the
+# trait impl wouldn't apply).
 reqwest = { version = "0.13", features = ["json", "form", "rustls"], default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
