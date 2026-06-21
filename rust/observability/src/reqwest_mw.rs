@@ -63,7 +63,7 @@ impl OtelReqwestMiddleware {
 impl Middleware for OtelReqwestMiddleware {
     async fn handle(
         &self,
-        req: Request,
+        mut req: Request,
         extensions: &mut http::Extensions,
         next: Next<'_>,
     ) -> reqwest_middleware::Result<Response> {
@@ -93,6 +93,21 @@ impl Middleware for OtelReqwestMiddleware {
         // `with_context` (vs `attach`) keeps the future `Send` — `ContextGuard`
         // is `!Send` and can't be held across this `.await`.
         let cx = Context::current_with_span(span);
+
+        // Inject W3C trace context (traceparent/tracestate) into the outbound
+        // request headers so the downstream service can EXTRACT it and continue
+        // this trace instead of starting a disconnected root. We inject the
+        // freshly-created client span's context, so downstream server spans
+        // parent off this CLIENT span — yielding a single linked trace across
+        // the service hop. If no propagator is installed (it always is once
+        // `setup_otel_sdk` ran) this is a no-op. (SMOODEV-2024)
+        opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(
+                &cx,
+                &mut opentelemetry_http::HeaderInjector(req.headers_mut()),
+            );
+        });
+
         let result = next.run(req, extensions).with_context(cx.clone()).await;
 
         let span = cx.span();
@@ -232,5 +247,66 @@ mod tests {
     #[test]
     fn middleware_is_constructible() {
         let _m = OtelReqwestMiddleware::new();
+    }
+
+    // --- W3C trace context propagation (SMOODEV-2024) ----------------------
+    //
+    // These exercise the inject side of the middleware's behavior directly via
+    // the global propagator, independent of a live reqwest call. The
+    // inbound/extract counterpart lives in `tower.rs`; a full inject->extract
+    // round-trip is covered there too.
+
+    use opentelemetry::propagation::TextMapPropagator;
+    use opentelemetry::trace::{SpanContext, TraceContextExt, TraceState};
+    use opentelemetry::{Context, SpanId, TraceFlags, TraceId};
+    use opentelemetry_sdk::propagation::TraceContextPropagator;
+
+    /// A context carrying a known sampled remote span context.
+    fn known_context() -> (Context, TraceId, SpanId) {
+        let trace_id = TraceId::from_hex("0af7651916cd43dd8448eb211c80319c").unwrap();
+        let span_id = SpanId::from_hex("b7ad6b7169203331").unwrap();
+        let sc = SpanContext::new(
+            trace_id,
+            span_id,
+            TraceFlags::SAMPLED,
+            true,
+            TraceState::default(),
+        );
+        let cx = Context::new().with_remote_span_context(sc);
+        (cx, trace_id, span_id)
+    }
+
+    #[test]
+    fn inject_writes_traceparent_header() {
+        let propagator = TraceContextPropagator::new();
+        let (cx, trace_id, span_id) = known_context();
+
+        let mut headers = http::HeaderMap::new();
+        propagator.inject_context(&cx, &mut opentelemetry_http::HeaderInjector(&mut headers));
+
+        let traceparent = headers
+            .get("traceparent")
+            .expect("traceparent header injected")
+            .to_str()
+            .unwrap();
+        // W3C format: 00-<trace_id>-<span_id>-<flags>
+        assert_eq!(
+            traceparent,
+            format!("00-{trace_id}-{span_id}-01"),
+            "traceparent encodes the active span context"
+        );
+    }
+
+    #[test]
+    fn inject_with_no_active_context_is_noop() {
+        let propagator = TraceContextPropagator::new();
+        // An empty context has no valid span context, so nothing is injected.
+        let cx = Context::new();
+        let mut headers = http::HeaderMap::new();
+        propagator.inject_context(&cx, &mut opentelemetry_http::HeaderInjector(&mut headers));
+        assert!(
+            headers.get("traceparent").is_none(),
+            "no traceparent header when there is no active span context"
+        );
     }
 }
