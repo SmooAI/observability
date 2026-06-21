@@ -43,6 +43,16 @@ mod stack;
 pub mod transport;
 pub mod types;
 
+/// Optional Tower / Axum server-span layer. Feature-gated (`tower`, default off)
+/// so the core crate stays lean for services that don't run an HTTP server.
+#[cfg(feature = "tower")]
+pub mod tower;
+
+/// Optional reqwest client-span middleware. Feature-gated
+/// (`reqwest-middleware`, default off).
+#[cfg(feature = "reqwest-middleware")]
+pub mod reqwest_mw;
+
 use once_cell::sync::OnceCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
