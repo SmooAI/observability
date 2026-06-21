@@ -39,6 +39,20 @@ func (s *Scope) SetUser(u *User) {
 	s.user = u
 }
 
+// User returns the scope's current user (nil if unset). Returns a copy so
+// callers can't mutate scope state through the pointer. Symmetric with SetUser
+// and used by the framework adapters (and their tests) to inspect request scope
+// across package boundaries.
+func (s *Scope) User() *User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.user == nil {
+		return nil
+	}
+	u := *s.user
+	return &u
+}
+
 // SetTag sets a single tag.
 func (s *Scope) SetTag(key, value string) {
 	s.mu.Lock()

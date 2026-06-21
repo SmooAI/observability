@@ -106,6 +106,39 @@ Establishes a request-scoped scope, records request context, and captures
 downstream panics (then re-panics so the host's recovery still runs; set
 `SwallowPanics: true` to write a 500 instead).
 
+## Fiber / Gin middleware
+
+Fiber and Gin adapters ship as their own Go modules under `go/fiber` and
+`go/gin` so the core SDK takes no dependency on either framework unless you
+import the adapter:
+
+```go
+// Fiber — github.com/SmooAI/observability/go/fiber
+import fiberobs "github.com/SmooAI/observability/go/fiber"
+
+app.Use(fiberobs.New(obs.Default, func(c *fiber.Ctx) *obs.User {
+    return &obs.User{ID: c.Get("X-User-Id")}
+}))
+```
+
+```go
+// Gin — github.com/SmooAI/observability/go/gin
+import ginobs "github.com/SmooAI/observability/go/gin"
+
+r.Use(ginobs.New(obs.Default, func(c *gin.Context) *obs.User {
+    return &obs.User{ID: c.GetHeader("X-User-Id")}
+}))
+```
+
+Both mirror the `net/http` middleware exactly: per-request scope on the request
+context, user/`request` context hydration (PII-scrubbed via the allowlist),
+and capture-then-rethrow on panic (`SwallowPanics: true` writes a 500 instead).
+They additionally capture handler-reported errors — the returned `error` for
+Fiber, `c.Errors` for Gin — tagged `source: fiber.middleware` / `gin.middleware`.
+Neither framework installs panic recovery by default in the way the host app
+expects, so pair the middleware with the framework's own recovery
+(`recover.New()` for Fiber, `gin.Recovery()` for Gin) when you rely on re-panic.
+
 ## Wire format
 
 `ObservabilityEvent` JSON is byte-compatible with the TS `ObservabilityEvent`
@@ -115,8 +148,9 @@ so one backend ingest endpoint (`type: "error"`) serves both SDKs. The SDK name
 
 ## Gaps / deferred
 
-- **Fiber / Gin / Echo adapters** — only `net/http` ships. They can be thin
-  adapters over the same `Scope` + `CaptureException` primitives.
+- **Echo adapter** — `net/http`, Fiber, and Gin ship (see above). Echo can be
+  added the same way: a thin adapter over the same `Scope` + `CaptureException`
+  primitives, as its own `go/echo` module.
 - **Span-implicit capture** — Go has no ambient span, so span-correlated
   capture uses `CaptureExceptionOnSpan(ctx, ...)` (reads the span off `ctx`).
   The plain `CaptureException` still records via transport + a synthetic span.

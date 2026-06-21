@@ -146,11 +146,21 @@ jobs:
                       exit 1
                   fi
 
+            # The Fiber/Gin adapters are separate Go modules (own go.mod) so the
+            # core stays dependency-free; vet/test must run per-module.
             - name: Vet
-              run: go vet ./...
+              run: |
+                  for m in . fiber gin; do
+                      [ -f "$m/go.mod" ] || continue
+                      echo "::group::go vet ($m)"; (cd "$m" && go vet ./...); echo "::endgroup::"
+                  done
 
             - name: Test
-              run: go test ./...
+              run: |
+                  for m in . fiber gin; do
+                      [ -f "$m/go.mod" ] || continue
+                      echo "::group::go test ($m)"; (cd "$m" && go test ./...); echo "::endgroup::"
+                  done
 
     # Python lane — ruff lint + format, pytest. Package in python/.
     python:
