@@ -28,4 +28,15 @@
     <ProjectReference Include="..\..\src\SmooAI.Observability\SmooAI.Observability.csproj" />
   </ItemGroup>
 
+  <!--
+    OpenTelemetry.Instrumentation.AspNetCore only subscribes to the
+    "Microsoft.AspNetCore" ActivitySource when the ASP.NET Core shared framework
+    is present. Without this reference the EnableAspNetCoreInstrumentation test
+    passes locally (framework on the dev box) but fails on a clean CI runner.
+    Reference it so the test exercises the instrumentation as a real host would.
+  -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
 </Project>

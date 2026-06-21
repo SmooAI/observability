@@ -54,6 +54,24 @@ public sealed class SetupOtelOptions
     /// metrics from, beyond the SDK's default meter.
     /// </summary>
     public IReadOnlyList<string>? AdditionalMeterNames { get; set; }
+
+    /// <summary>
+    /// Opt-in: collect ASP.NET Core HTTP <em>server</em> spans + metrics via
+    /// <c>OpenTelemetry.Instrumentation.AspNetCore</c>. Off by default to keep the
+    /// SDK lean — consumers who serve HTTP set this to <c>true</c> and get
+    /// incoming-request traces/metrics without hand-wiring
+    /// <see cref="AdditionalActivitySources"/>. Only takes effect when the
+    /// matching exporter endpoint is configured.
+    /// </summary>
+    public bool EnableAspNetCoreInstrumentation { get; set; }
+
+    /// <summary>
+    /// Opt-in: collect outbound <see cref="System.Net.Http.HttpClient"/>
+    /// <em>client</em> spans + metrics via <c>OpenTelemetry.Instrumentation.Http</c>.
+    /// Off by default. Only takes effect when the matching exporter endpoint is
+    /// configured.
+    /// </summary>
+    public bool EnableHttpInstrumentation { get; set; }
 }
 
 /// <summary>
@@ -184,6 +202,14 @@ public static class ObservabilitySdk
             {
                 tracerBuilder.AddSource(options.AdditionalActivitySources.ToArray());
             }
+            if (options.EnableAspNetCoreInstrumentation)
+            {
+                tracerBuilder.AddAspNetCoreInstrumentation();
+            }
+            if (options.EnableHttpInstrumentation)
+            {
+                tracerBuilder.AddHttpClientInstrumentation();
+            }
             tracerBuilder.AddOtlpExporter(o => ConfigureExporter(o, options.OtlpTracesEndpoint!, options));
             tracerProvider = tracerBuilder.Build();
         }
@@ -197,6 +223,14 @@ public static class ObservabilitySdk
             if (options.AdditionalMeterNames is { Count: > 0 })
             {
                 meterBuilder.AddMeter(options.AdditionalMeterNames.ToArray());
+            }
+            if (options.EnableAspNetCoreInstrumentation)
+            {
+                meterBuilder.AddAspNetCoreInstrumentation();
+            }
+            if (options.EnableHttpInstrumentation)
+            {
+                meterBuilder.AddHttpClientInstrumentation();
             }
             meterBuilder.AddOtlpExporter((exporterOptions, readerOptions) =>
             {

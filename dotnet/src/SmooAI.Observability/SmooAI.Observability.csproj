@@ -31,6 +31,15 @@
   <ItemGroup>
     <PackageReference Include="OpenTelemetry" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
+    <!--
+      Opt-in auto-instrumentation. Wired into ObservabilitySdk.Setup behind
+      SetupOtelOptions.EnableAspNetCoreInstrumentation / EnableHttpInstrumentation
+      (both default off). The instrumentation extension methods register the
+      relevant ActivitySources/Meters so consumers get HTTP server + client spans
+      without hand-wiring AdditionalActivitySources.
+    -->
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.2" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.1" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
 
