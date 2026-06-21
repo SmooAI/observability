@@ -29,6 +29,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      Outbound webhook delivery (Transport.cs) goes through SmooAI.Fetch — the
+      polyglot resilient fetch (Polly retry, per-request timeout, circuit
+      breaking) — instead of a raw HttpClient.
+    -->
+    <PackageReference Include="SmooAI.Fetch" Version="3.3.10" />
     <PackageReference Include="OpenTelemetry" Version="1.16.0" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.16.0" />
     <!--

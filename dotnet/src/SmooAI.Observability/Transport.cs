@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Text;
+using SmooAI.Fetch;
 
 namespace SmooAI.Observability;
 
@@ -22,6 +23,14 @@ public sealed class TransportOptions
 
     /// <summary>Per-request timeout. Default 10s.</summary>
     public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Retries applied <em>within a single flush attempt</em> by the resilient
+    /// <see cref="SmooFetch"/> transport (transient exceptions + 429/5xx). This is
+    /// distinct from the transport's own batch-requeue, which only kicks in once a
+    /// flush has exhausted these retries and still failed. Default 2.
+    /// </summary>
+    public int MaxRetries { get; set; } = 2;
 }
 
 /// <summary>
@@ -30,13 +39,22 @@ public sealed class TransportOptions
 /// retries a failed batch by pushing it back to the front of the queue. Errors
 /// are swallowed — observability must never throw into the host application.
 ///
+/// Outbound delivery goes through <see cref="SmooFetch"/> (the SmooAI resilient
+/// fetch — Polly-backed retry, per-request timeout, circuit breaking) by default.
+/// A caller-supplied <see cref="HttpClient"/> is honored as an escape hatch and
+/// used directly (no SmooFetch resilience layer), for tests or hosts that need a
+/// fully custom pipeline.
+///
 /// Port of the TS <c>Transport</c> (without the browser <c>sendBeacon</c> path,
 /// which has no .NET analogue).
 /// </summary>
 public sealed class Transport : IDisposable, IAsyncDisposable
 {
     private readonly TransportOptions _options;
-    private readonly HttpClient _httpClient;
+    // Exactly one of these is set: _fetch by default, _httpClient when the caller
+    // supplies a custom client via the escape hatch.
+    private readonly SmooFetch? _fetch;
+    private readonly HttpClient? _httpClient;
     private readonly bool _ownsHttpClient;
     private readonly Queue<ObservabilityEvent> _queue = new();
     private readonly object _gate = new();
@@ -45,8 +63,10 @@ public sealed class Transport : IDisposable, IAsyncDisposable
     private bool _disposed;
 
     /// <summary>
-    /// Create a transport. If <paramref name="httpClient"/> is null a private
-    /// <see cref="HttpClient"/> is created and disposed with this transport.
+    /// Create a transport. By default delivery uses an internally-managed,
+    /// resilient <see cref="SmooFetch"/>. If <paramref name="httpClient"/> is
+    /// supplied it is used directly as an escape hatch — the caller owns its
+    /// disposal and is responsible for any resilience behavior.
     /// </summary>
     public Transport(TransportOptions options, HttpClient? httpClient = null)
     {
@@ -55,9 +75,36 @@ public sealed class Transport : IDisposable, IAsyncDisposable
         {
             throw new ArgumentException("Transport requires a DSN.", nameof(options));
         }
-        _ownsHttpClient = httpClient is null;
-        _httpClient = httpClient ?? new HttpClient();
-        _httpClient.Timeout = _options.RequestTimeout;
+
+        if (httpClient is null)
+        {
+            // Default path: resilient SmooFetch with the transport's timeout +
+            // retry config and a circuit breaker so a hard-down ingest endpoint
+            // stops hammering after repeated failures.
+            _fetch = SmooFetch.Create(o =>
+            {
+                o.Timeout = _options.RequestTimeout;
+                o.RetryPolicy = _options.MaxRetries > 0
+                    ? RetryPolicy.ExponentialBackoff(_options.MaxRetries)
+                    : RetryPolicy.None;
+                // Stop hammering a hard-down ingest endpoint: open after 5
+                // consecutive failures for 30s. A tripped breaker throws, which
+                // PostAsync catches and reports as a failed delivery, so the
+                // batch is requeued rather than lost.
+                o.CircuitBreaker = new CircuitBreakerOptions(
+                    FailureThreshold: 5,
+                    OpenDuration: TimeSpan.FromSeconds(30));
+            });
+            _ownsHttpClient = false;
+        }
+        else
+        {
+            // Escape hatch: use the caller's client verbatim.
+            _httpClient = httpClient;
+            _httpClient.Timeout = _options.RequestTimeout;
+            _ownsHttpClient = false;
+        }
+
         // Disarmed timer; armed on demand when the first event is enqueued.
         _timer = new Timer(_ => _ = FlushAsync(), null, Timeout.Infinite, Timeout.Infinite);
     }
@@ -123,10 +170,10 @@ public sealed class Transport : IDisposable, IAsyncDisposable
         {
             var payload = new IngestPayload { Type = "error", Events = batch };
             var json = ObservabilityJson.Serialize(payload);
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
-            using var response = await _httpClient.PostAsync(_options.Dsn, content).ConfigureAwait(false);
-            // Non-2xx is a delivery failure: requeue for the next attempt.
-            if (!response.IsSuccessStatusCode)
+            var delivered = await PostAsync(json).ConfigureAwait(false);
+            // Non-2xx (or transport failure) is a delivery failure: requeue for
+            // the next attempt.
+            if (!delivered)
             {
                 RestoreBatch(batch);
             }
@@ -147,6 +194,43 @@ public sealed class Transport : IDisposable, IAsyncDisposable
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// POST the serialized payload via SmooFetch (default) or the escape-hatch
+    /// <see cref="HttpClient"/>. Returns <c>true</c> on a 2xx, <c>false</c>
+    /// otherwise. Never throws (transport exceptions are caught and reported as a
+    /// failed delivery so the batch is requeued).
+    /// </summary>
+    private async Task<bool> PostAsync(string json)
+    {
+        if (_fetch is not null)
+        {
+            // SmooFetch serializes typed bodies itself, but we need the exact
+            // ObservabilityJson wire bytes (camelCase + omit-nulls), so build the
+            // request with pre-serialized content and use the low-level SendAsync
+            // (which applies retry/timeout/circuit-breaking but does NOT throw on
+            // non-2xx — we inspect the status ourselves).
+            using var request = new HttpRequestMessage(HttpMethod.Post, _options.Dsn)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+            try
+            {
+                using var response = await _fetch.SendAsync(request).ConfigureAwait(false);
+                return response.IsSuccessStatusCode;
+            }
+            catch
+            {
+                // Retries / circuit breaker exhausted — treat as a failed delivery.
+                return false;
+            }
+        }
+
+        // Escape hatch: raw HttpClient, no SmooFetch resilience.
+        using var content = new StringContent(json, Encoding.UTF8, "application/json");
+        using var raw = await _httpClient!.PostAsync(_options.Dsn, content).ConfigureAwait(false);
+        return raw.IsSuccessStatusCode;
     }
 
     /// <summary>Current queue depth — exposed for tests.</summary>
@@ -227,7 +311,7 @@ public sealed class Transport : IDisposable, IAsyncDisposable
         _timer.Dispose();
         if (_ownsHttpClient)
         {
-            _httpClient.Dispose();
+            _httpClient?.Dispose();
         }
     }
 
@@ -250,7 +334,7 @@ public sealed class Transport : IDisposable, IAsyncDisposable
         await _timer.DisposeAsync().ConfigureAwait(false);
         if (_ownsHttpClient)
         {
-            _httpClient.Dispose();
+            _httpClient?.Dispose();
         }
     }
 }
