@@ -1,13 +1,20 @@
+import smooFetch from '@smooai/fetch/browser';
 import { Transport } from '../transport';
 import type { ClientOptions } from '../types';
 
 /**
  * Build a browser-flavored Transport: keepalive fetch, `sendBeacon` on
  * `pagehide`, bound to `visibilitychange` for the modern browser-lifecycle path.
+ *
+ * SMOODEV-2026: the timer/batch flush goes through `@smooai/fetch/browser`
+ * (retries/timeouts/circuit-breaking). The `sendBeacon` page-unload path is
+ * left untouched — it's a browser primitive, not a fetch, and is the only
+ * thing that reliably delivers during unload.
  */
 export function makeBrowserTransport(opts: ClientOptions): Transport {
     const adapter = {
         canBeacon: typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function',
+        fetcher: smooFetch,
         beacon: typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function' ? navigator.sendBeacon.bind(navigator) : undefined,
         bindLifecycle: (onPageHide: () => void) => {
             if (typeof window === 'undefined') return;

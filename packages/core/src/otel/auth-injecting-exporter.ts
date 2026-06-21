@@ -30,11 +30,43 @@
  * SMOODEV-1206.
  */
 
+import smooFetch, { HTTPResponseError } from '@smooai/fetch';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
 import { JsonMetricsSerializer, JsonTraceSerializer } from '@opentelemetry/otlp-transformer';
 import type { ResourceMetrics, PushMetricExporter } from '@opentelemetry/sdk-metrics';
 import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base';
 import type { TokenProvider } from '../auth/token-provider';
+
+/**
+ * Default exporter transport: `@smooai/fetch` owns retries (exponential
+ * backoff + jitter), timeouts, and circuit-breaking. It *throws*
+ * `HTTPResponseError` on a non-2xx response after exhausting retries; we
+ * unwrap that back into the underlying `Response` so the caller's existing
+ * `status === 401` / `!res.ok` control flow (auth-refresh-once + error
+ * surfacing) keeps working unchanged.
+ *
+ * SMOODEV-2026: this replaces the hand-rolled `AbortController` timeout — we
+ * deliberately let `@smooai/fetch` own the single transient-retry/timeout
+ * layer rather than stacking another on top (the BatchSpanProcessor /
+ * PeriodicExportingMetricReader already re-export on `FAILED`, so a second
+ * in-exporter retry loop would compound). The 401-invalidate-and-retry-once
+ * below is auth refresh, not transient retry, so it stays.
+ */
+async function defaultExporterFetch(url: string, init: RequestInit): Promise<Response> {
+    try {
+        // `@smooai/fetch` returns a `ResponseWithBody` (a superset of Response).
+        return (await smooFetch(url, init)) as unknown as Response;
+    } catch (error) {
+        // Non-2xx after retries throws — hand the Response back so the
+        // status-based branching upstream still applies. Re-throw anything
+        // that isn't an HTTP response (network/timeout/circuit-open) so it
+        // surfaces as an export failure.
+        if (error instanceof HTTPResponseError) {
+            return error.response as unknown as Response;
+        }
+        throw error;
+    }
+}
 
 interface AuthInjectingExporterOptions {
     /** Fully-qualified OTLP endpoint, e.g. `https://api.smoo.ai/v1/traces`. */
@@ -43,9 +75,12 @@ interface AuthInjectingExporterOptions {
     tokenProvider: TokenProvider;
     /** Static headers to merge onto every request (e.g. user-agent). */
     staticHeaders?: Record<string, string>;
-    /** Test seam — override fetch. */
-    fetcher?: typeof fetch;
-    /** Per-request timeout in ms. Default 10s. */
+    /**
+     * Override the transport. Defaults to `@smooai/fetch` (resilient).
+     * Primarily a test seam.
+     */
+    fetcher?: (url: string, init: RequestInit) => Promise<Response>;
+    /** Per-request timeout in ms. Default 10s. Owned by `@smooai/fetch`. */
     timeoutMs?: number;
 }
 
@@ -53,7 +88,7 @@ abstract class BaseAuthInjectingExporter<Item> {
     protected readonly url: string;
     protected readonly tokenProvider: TokenProvider;
     protected readonly staticHeaders: Record<string, string>;
-    protected readonly fetcher: typeof fetch;
+    protected readonly fetcher: (url: string, init: RequestInit) => Promise<Response>;
     protected readonly timeoutMs: number;
     private shutdownRequested = false;
 
@@ -62,7 +97,7 @@ abstract class BaseAuthInjectingExporter<Item> {
         this.url = opts.url;
         this.tokenProvider = opts.tokenProvider;
         this.staticHeaders = opts.staticHeaders ?? {};
-        this.fetcher = opts.fetcher ?? fetch;
+        this.fetcher = opts.fetcher ?? defaultExporterFetch;
         this.timeoutMs = opts.timeoutMs ?? 10_000;
     }
 
@@ -102,22 +137,21 @@ abstract class BaseAuthInjectingExporter<Item> {
         const body = new TextDecoder().decode(bodyBytes);
         const attempt = async (): Promise<Response> => {
             const token = await this.tokenProvider.getAccessToken();
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), this.timeoutMs);
-            try {
-                return await this.fetcher(this.url, {
-                    method: 'POST',
-                    headers: {
-                        ...this.staticHeaders,
-                        authorization: `Bearer ${token}`,
-                        'content-type': 'application/json',
-                    },
-                    body,
-                    signal: controller.signal,
-                });
-            } finally {
-                clearTimeout(timer);
-            }
+            // Timeout is owned by the transport (`@smooai/fetch`) via the
+            // `options.timeout` passthrough below — no hand-rolled
+            // AbortController. The cast carries `@smooai/fetch`'s `options`
+            // bag on the standard `RequestInit`; a plain-`fetch` test seam
+            // simply ignores the extra field.
+            return await this.fetcher(this.url, {
+                method: 'POST',
+                headers: {
+                    ...this.staticHeaders,
+                    authorization: `Bearer ${token}`,
+                    'content-type': 'application/json',
+                },
+                body,
+                options: { timeout: { timeoutMs: this.timeoutMs } },
+            } as RequestInit);
         };
 
         let res = await attempt();

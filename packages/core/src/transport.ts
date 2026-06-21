@@ -4,6 +4,20 @@ const DEFAULT_FLUSH_MS = 1000;
 const DEFAULT_BATCH_SIZE = 30;
 const DEFAULT_QUEUE_MAX = 250;
 
+/**
+ * Minimal fetch-like contract the transport relies on for batch delivery.
+ *
+ * `@smooai/fetch` (the resilient client injected by the node/browser
+ * adapters) satisfies this: it accepts the same `(url, init)` shape and
+ * resolves to a `Response` on 2xx, while *throwing* on network errors and
+ * non-2xx responses after exhausting its own retries. Our `flush()` catch
+ * block re-queues on any throw, so both the throw-on-failure and
+ * resolve-on-success paths land in the right place without the transport
+ * caring which client is underneath. Native `fetch` also satisfies this
+ * (it just resolves on non-2xx instead of throwing — still handled).
+ */
+export type TransportFetch = (url: string, init: RequestInit) => Promise<{ ok?: boolean } | Response>;
+
 interface TransportRuntimeAdapter {
     /** Whether `navigator.sendBeacon` is available (browser). */
     canBeacon: boolean;
@@ -11,6 +25,13 @@ interface TransportRuntimeAdapter {
     beacon?: (url: string, body: string) => boolean;
     /** Bind `pagehide` so we can flush via beacon. */
     bindLifecycle?: (onPageHide: () => void) => void;
+    /**
+     * Resilient fetch used for the timer/batch flush path. Supplied by the
+     * runtime adapter (node/browser) as the matching `@smooai/fetch` entry
+     * point so retries/timeouts/circuit-breaking come for free. Falls back
+     * to the global `fetch` when omitted (e.g. in tests).
+     */
+    fetcher?: TransportFetch;
 }
 
 /**
@@ -56,7 +77,11 @@ export class Transport {
         this.clearTimer();
         try {
             const payload: IngestPayload = { type: 'error', events: batch };
-            await fetch(this.opts.dsn, {
+            // Prefer the resilient client supplied by the runtime adapter
+            // (`@smooai/fetch`) — it owns retries/timeouts/circuit-breaking.
+            // Fall back to global fetch when no fetcher was injected (tests).
+            const fetcher = this.adapter.fetcher ?? ((url, init) => fetch(url, init));
+            await fetcher(this.opts.dsn, {
                 method: 'POST',
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify(payload),
