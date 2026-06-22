@@ -48,7 +48,21 @@ thiserror = "2"
 # trait to implement it ourselves (the `reqwest` feature, which impls it for
 # reqwest::Client, is no longer used).
 opentelemetry = { version = "0.32", features = ["trace", "metrics"] }
-opentelemetry_sdk = { version = "0.32", features = ["trace", "metrics", "rt-tokio"] }
+# The two `experimental_*_with_async_runtime` features expose the async-runtime
+# batch span processor + periodic metric reader used in `otel.rs`. They are
+# REQUIRED for correctness, not a nicety: the default (thread-based) processors
+# drive the OTLP export with `futures_executor::block_on` on a bare OS thread,
+# where our reqwest-backed exporter has no Tokio reactor and PANICS — which under
+# the workspace `panic = "abort"` profile aborts the host process (SMOODEV-2045).
+# Both features pull in `experimental_async_runtime`; `rt-tokio` supplies the
+# `runtime::Tokio` impl that `tokio::spawn`s the export onto the live runtime.
+opentelemetry_sdk = { version = "0.32", features = [
+    "trace",
+    "metrics",
+    "rt-tokio",
+    "experimental_trace_batch_span_processor_with_async_runtime",
+    "experimental_metrics_periodicreader_with_async_runtime",
+] }
 opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "http-json"], default-features = false }
 opentelemetry-http = { version = "0.32", default-features = false }
 opentelemetry-semantic-conventions = "0.32"

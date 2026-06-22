@@ -30,7 +30,8 @@ use once_cell::sync::OnceCell;
 use opentelemetry_otlp::{
     MetricExporter, Protocol, SpanExporter, WithExportConfig, WithHttpConfig,
 };
-use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::metrics::SdkMeterProvider;
+use opentelemetry_sdk::runtime;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::Resource;
 use std::collections::HashMap;
@@ -150,11 +151,31 @@ fn build_and_install(options: SetupOtelOptions) -> OtelSdkHandle {
 
     let resource = build_resource(&options);
 
+    // CRITICAL — both pipelines MUST run their export loop on the Tokio runtime,
+    // never on a bare OS thread (SMOODEV-2045). The DEFAULT `with_batch_exporter`
+    // (trace) and `PeriodicReader::builder` (metrics) in opentelemetry_sdk 0.32
+    // spawn a dedicated `std::thread` and drive the async export with
+    // `futures_executor::block_on`. Our exporter's HTTP transport is
+    // `AuthInjectingHttpClient` → `smooai-fetch` → `reqwest`, and reqwest's
+    // request execution PANICS when no Tokio reactor is present
+    // ("there is no reactor running, must be called from the context of a Tokio
+    // 1.x runtime"). On that dedicated OS thread there is none, so the very first
+    // export aborts the whole process — and because the workspace release profile
+    // is `panic = "abort"`, that panic on the background thread takes the host
+    // down (the temporal-worker crashloop that blocked eSign, SMOODEV-2031).
+    //
+    // The async-runtime variants (`span_processor_with_async_runtime` /
+    // `periodic_reader_with_async_runtime`, gated by the `rt-tokio` feature this
+    // crate already enables) instead `tokio::spawn` the worker, so the export
+    // future runs on the multi-thread runtime where reqwest has its reactor. This
+    // is the documented way to drive the OTLP/HTTP exporter from an async host.
     let tracer_provider = match build_span_exporter(&options) {
         Some(exporter) => {
+            use opentelemetry_sdk::trace::span_processor_with_async_runtime::BatchSpanProcessor;
+            let processor = BatchSpanProcessor::builder(exporter, runtime::Tokio).build();
             let tp = SdkTracerProvider::builder()
                 .with_resource(resource.clone())
-                .with_batch_exporter(exporter)
+                .with_span_processor(processor)
                 .build();
             opentelemetry::global::set_tracer_provider(tp.clone());
             Some(tp)
@@ -164,7 +185,8 @@ fn build_and_install(options: SetupOtelOptions) -> OtelSdkHandle {
 
     let meter_provider = match build_metric_exporter(&options) {
         Some(exporter) => {
-            let reader = PeriodicReader::builder(exporter)
+            use opentelemetry_sdk::metrics::periodic_reader_with_async_runtime::PeriodicReader;
+            let reader = PeriodicReader::builder(exporter, runtime::Tokio)
                 .with_interval(options.metric_export_interval)
                 .build();
             let mp = SdkMeterProvider::builder()
