@@ -1,0 +1,1169 @@
+{
+    "$schema": "./README.md",
+    "version": 1,
+    "adr": "ADR-097",
+    "description": "Golden vectors every @smooai/observability SDK (TS, Rust, Python, Go, .NET) must reproduce. See parity/README.md.",
+    "hash": {
+        "algorithm": "FNV-1a",
+        "bits": 32,
+        "offsetBasis": "0x811c9dc5",
+        "prime": "0x01000193",
+        "input": "UTF-8 bytes of the id, folded one byte at a time (no endianness)",
+        "decision": "ratio<=0 -> false; ratio>=1 -> true; non-finite ratio -> true (fail open); else (hash / 2^32) < ratio",
+        "note": "hash is UNSIGNED 32-bit; divide by 4294967296.0 in binary64 — exact, no rounding"
+    },
+    "sampleDecision": [
+        {
+            "id": "",
+            "ratio": 0,
+            "hash": 2166136261,
+            "expected": false
+        },
+        {
+            "id": "",
+            "ratio": 0.01,
+            "hash": 2166136261,
+            "expected": false
+        },
+        {
+            "id": "",
+            "ratio": 0.1,
+            "hash": 2166136261,
+            "expected": false
+        },
+        {
+            "id": "",
+            "ratio": 0.25,
+            "hash": 2166136261,
+            "expected": false
+        },
+        {
+            "id": "",
+            "ratio": 0.5,
+            "hash": 2166136261,
+            "expected": false
+        },
+        {
+            "id": "",
+            "ratio": 0.9,
+            "hash": 2166136261,
+            "expected": true
+        },
+        {
+            "id": "",
+            "ratio": 0.99,
+            "hash": 2166136261,
+            "expected": true
+        },
+        {
+            "id": "",
+            "ratio": 1,
+            "hash": 2166136261,
+            "expected": true
+        },
+        {
+            "id": "a",
+            "ratio": 0,
+            "hash": 3826002220,
+            "expected": false
+        },
+        {
+            "id": "a",
+            "ratio": 0.01,
+            "hash": 3826002220,
+            "expected": false
+        },
+        {
+            "id": "a",
+            "ratio": 0.1,
+            "hash": 3826002220,
+            "expected": false
+        },
+        {
+            "id": "a",
+            "ratio": 0.25,
+            "hash": 3826002220,
+            "expected": false
+        },
+        {
+            "id": "a",
+            "ratio": 0.5,
+            "hash": 3826002220,
+            "expected": false
+        },
+        {
+            "id": "a",
+            "ratio": 0.9,
+            "hash": 3826002220,
+            "expected": true
+        },
+        {
+            "id": "a",
+            "ratio": 0.99,
+            "hash": 3826002220,
+            "expected": true
+        },
+        {
+            "id": "a",
+            "ratio": 1,
+            "hash": 3826002220,
+            "expected": true
+        },
+        {
+            "id": "foobar",
+            "ratio": 0,
+            "hash": 3214735720,
+            "expected": false
+        },
+        {
+            "id": "foobar",
+            "ratio": 0.01,
+            "hash": 3214735720,
+            "expected": false
+        },
+        {
+            "id": "foobar",
+            "ratio": 0.1,
+            "hash": 3214735720,
+            "expected": false
+        },
+        {
+            "id": "foobar",
+            "ratio": 0.25,
+            "hash": 3214735720,
+            "expected": false
+        },
+        {
+            "id": "foobar",
+            "ratio": 0.5,
+            "hash": 3214735720,
+            "expected": false
+        },
+        {
+            "id": "foobar",
+            "ratio": 0.9,
+            "hash": 3214735720,
+            "expected": true
+        },
+        {
+            "id": "foobar",
+            "ratio": 0.99,
+            "hash": 3214735720,
+            "expected": true
+        },
+        {
+            "id": "foobar",
+            "ratio": 1,
+            "hash": 3214735720,
+            "expected": true
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0,
+            "hash": 2416807230,
+            "expected": false
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0.01,
+            "hash": 2416807230,
+            "expected": false
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0.1,
+            "hash": 2416807230,
+            "expected": false
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0.25,
+            "hash": 2416807230,
+            "expected": false
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0.5,
+            "hash": 2416807230,
+            "expected": false
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0.9,
+            "hash": 2416807230,
+            "expected": true
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 0.99,
+            "hash": 2416807230,
+            "expected": true
+        },
+        {
+            "id": "session-00000000-0000-4000-8000-000000000000",
+            "ratio": 1,
+            "hash": 2416807230,
+            "expected": true
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0,
+            "hash": 2333387986,
+            "expected": false
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0.01,
+            "hash": 2333387986,
+            "expected": false
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0.1,
+            "hash": 2333387986,
+            "expected": false
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0.25,
+            "hash": 2333387986,
+            "expected": false
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0.5,
+            "hash": 2333387986,
+            "expected": false
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0.9,
+            "hash": 2333387986,
+            "expected": true
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 0.99,
+            "hash": 2333387986,
+            "expected": true
+        },
+        {
+            "id": "4bf92f3577b34da6a3ce929d0e0e4736",
+            "ratio": 1,
+            "hash": 2333387986,
+            "expected": true
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0,
+            "hash": 3718907387,
+            "expected": false
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0.01,
+            "hash": 3718907387,
+            "expected": false
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0.1,
+            "hash": 3718907387,
+            "expected": false
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0.25,
+            "hash": 3718907387,
+            "expected": false
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0.5,
+            "hash": 3718907387,
+            "expected": false
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0.9,
+            "hash": 3718907387,
+            "expected": true
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 0.99,
+            "hash": 3718907387,
+            "expected": true
+        },
+        {
+            "id": "user@example.com",
+            "ratio": 1,
+            "hash": 3718907387,
+            "expected": true
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0,
+            "hash": 862771623,
+            "expected": false
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0.01,
+            "hash": 862771623,
+            "expected": false
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0.1,
+            "hash": 862771623,
+            "expected": false
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0.25,
+            "hash": 862771623,
+            "expected": true
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0.5,
+            "hash": 862771623,
+            "expected": true
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0.9,
+            "hash": 862771623,
+            "expected": true
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 0.99,
+            "hash": 862771623,
+            "expected": true
+        },
+        {
+            "id": "🎉-emoji-session",
+            "ratio": 1,
+            "hash": 862771623,
+            "expected": true
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0,
+            "hash": 4099347720,
+            "expected": false
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0.01,
+            "hash": 4099347720,
+            "expected": false
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0.1,
+            "hash": 4099347720,
+            "expected": false
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0.25,
+            "hash": 4099347720,
+            "expected": false
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0.5,
+            "hash": 4099347720,
+            "expected": false
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0.9,
+            "hash": 4099347720,
+            "expected": false
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 0.99,
+            "hash": 4099347720,
+            "expected": true
+        },
+        {
+            "id": "Ünïcødé-sessión",
+            "ratio": 1,
+            "hash": 4099347720,
+            "expected": true
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0,
+            "hash": 1003643390,
+            "expected": false
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0.01,
+            "hash": 1003643390,
+            "expected": false
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0.1,
+            "hash": 1003643390,
+            "expected": false
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0.25,
+            "hash": 1003643390,
+            "expected": true
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0.5,
+            "hash": 1003643390,
+            "expected": true
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0.9,
+            "hash": 1003643390,
+            "expected": true
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 0.99,
+            "hash": 1003643390,
+            "expected": true
+        },
+        {
+            "id": "日本語セッション",
+            "ratio": 1,
+            "hash": 1003643390,
+            "expected": true
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0,
+            "hash": 1186238917,
+            "expected": false
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0.01,
+            "hash": 1186238917,
+            "expected": false
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0.1,
+            "hash": 1186238917,
+            "expected": false
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0.25,
+            "hash": 1186238917,
+            "expected": false
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0.5,
+            "hash": 1186238917,
+            "expected": true
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0.9,
+            "hash": 1186238917,
+            "expected": true
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 0.99,
+            "hash": 1186238917,
+            "expected": true
+        },
+        {
+            "id": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "ratio": 1,
+            "hash": 1186238917,
+            "expected": true
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0,
+            "hash": 1147061098,
+            "expected": false
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0.01,
+            "hash": 1147061098,
+            "expected": false
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0.1,
+            "hash": 1147061098,
+            "expected": false
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0.25,
+            "hash": 1147061098,
+            "expected": false
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0.5,
+            "hash": 1147061098,
+            "expected": true
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0.9,
+            "hash": 1147061098,
+            "expected": true
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 0.99,
+            "hash": 1147061098,
+            "expected": true
+        },
+        {
+            "id": " leading-and-trailing ",
+            "ratio": 1,
+            "hash": 1147061098,
+            "expected": true
+        }
+    ],
+    "sampleDecisionNearThreshold": [
+        {
+            "id": "near-6687",
+            "ratio": 0.5,
+            "hash": 2147817803,
+            "position": 0.5000778015237302,
+            "expected": false
+        },
+        {
+            "id": "near-21705",
+            "ratio": 0.5,
+            "hash": 2147419807,
+            "position": 0.4999851358588785,
+            "expected": true
+        },
+        {
+            "id": "near-29110",
+            "ratio": 0.5,
+            "hash": 2147069507,
+            "position": 0.49990357528440654,
+            "expected": true
+        },
+        {
+            "id": "near-46260",
+            "ratio": 0.5,
+            "hash": 2147488784,
+            "position": 0.5000011958181858,
+            "expected": false
+        },
+        {
+            "id": "near-55669",
+            "ratio": 0.5,
+            "hash": 2147349675,
+            "position": 0.49996880698017776,
+            "expected": true
+        },
+        {
+            "id": "near-66863",
+            "ratio": 0.5,
+            "hash": 2147749841,
+            "position": 0.5000619778875262,
+            "expected": false
+        }
+    ],
+    "sampleDecisionNonFiniteRatio": [
+        {
+            "id": "session-1",
+            "ratio": "NaN",
+            "expected": true
+        },
+        {
+            "id": "session-1",
+            "ratio": "Infinity",
+            "expected": true
+        },
+        {
+            "id": "session-1",
+            "ratio": "-Infinity",
+            "expected": true
+        }
+    ],
+    "levelNormalization": [
+        {
+            "input": "trace",
+            "expected": "TRACE"
+        },
+        {
+            "input": "verbose",
+            "expected": "TRACE"
+        },
+        {
+            "input": "debug",
+            "expected": "DEBUG"
+        },
+        {
+            "input": "DEBUG",
+            "expected": "DEBUG"
+        },
+        {
+            "input": "info",
+            "expected": "INFO"
+        },
+        {
+            "input": "Information",
+            "expected": "INFO"
+        },
+        {
+            "input": "log",
+            "expected": "INFO"
+        },
+        {
+            "input": "notice",
+            "expected": "INFO"
+        },
+        {
+            "input": "warn",
+            "expected": "WARN"
+        },
+        {
+            "input": "warning",
+            "expected": "WARN"
+        },
+        {
+            "input": "WARNING",
+            "expected": "WARN"
+        },
+        {
+            "input": "error",
+            "expected": "ERROR"
+        },
+        {
+            "input": "Error",
+            "expected": "ERROR"
+        },
+        {
+            "input": "ERROR",
+            "expected": "ERROR"
+        },
+        {
+            "input": "err",
+            "expected": "ERROR"
+        },
+        {
+            "input": "fatal",
+            "expected": "FATAL"
+        },
+        {
+            "input": "critical",
+            "expected": "FATAL"
+        },
+        {
+            "input": "crit",
+            "expected": "FATAL"
+        },
+        {
+            "input": "panic",
+            "expected": "FATAL"
+        },
+        {
+            "input": "emergency",
+            "expected": "FATAL"
+        },
+        {
+            "input": "  Warn  ",
+            "expected": "WARN"
+        },
+        {
+            "input": "bogus",
+            "expected": "INFO"
+        },
+        {
+            "input": "",
+            "expected": "INFO"
+        }
+    ],
+    "traceparentParse": [
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "expected": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 1,
+                "sampled": true
+            }
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00",
+            "expected": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 0,
+                "sampled": false
+            }
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-03",
+            "expected": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 3,
+                "sampled": true
+            }
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-fe",
+            "expected": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 254,
+                "sampled": false
+            }
+        },
+        {
+            "input": "01-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "expected": null,
+            "why": "wrong version — strict parser accepts only 00"
+        },
+        {
+            "input": "ff-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01",
+            "expected": null,
+            "why": "version ff is forbidden by the W3C spec"
+        },
+        {
+            "input": "00-00000000000000000000000000000000-00f067aa0ba902b7-01",
+            "expected": null,
+            "why": "all-zero trace id is invalid"
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-0000000000000000-01",
+            "expected": null,
+            "why": "all-zero span id is invalid"
+        },
+        {
+            "input": "00-4BF92F3577B34DA6A3CE929D0E0E4736-00f067aa0ba902b7-01",
+            "expected": null,
+            "why": "hex must be lowercase"
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e473-00f067aa0ba902b7-01",
+            "expected": null,
+            "why": "trace id too short"
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-1",
+            "expected": null,
+            "why": "flags must be exactly two hex digits"
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7",
+            "expected": null,
+            "why": "too few fields"
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01-extra",
+            "expected": null,
+            "why": "too many fields for version 00"
+        },
+        {
+            "input": "00-4bf92f3577b34da6a3ce929d0e0e4736-zzzzzzzzzzzzzzzz-01",
+            "expected": null,
+            "why": "non-hex span id"
+        },
+        {
+            "input": "",
+            "expected": null,
+            "why": "empty header"
+        },
+        {
+            "input": "garbage",
+            "expected": null,
+            "why": "not a traceparent"
+        }
+    ],
+    "traceparentFormat": [
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 1
+            },
+            "expected": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        },
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 0
+            },
+            "expected": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"
+        },
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "sampled": true
+            },
+            "expected": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        },
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "sampled": false
+            },
+            "expected": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-00"
+        },
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 255
+            },
+            "expected": "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-ff"
+        },
+        {
+            "input": {
+                "traceId": "00000000000000000000000000000000",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 1
+            },
+            "expected": null,
+            "why": "format must never emit what parse rejects"
+        },
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "short",
+                "flags": 1
+            },
+            "expected": null,
+            "why": "invalid span id"
+        },
+        {
+            "input": {
+                "traceId": "4bf92f3577b34da6a3ce929d0e0e4736",
+                "spanId": "00f067aa0ba902b7",
+                "flags": 256
+            },
+            "expected": null,
+            "why": "flags out of byte range"
+        }
+    ],
+    "settingsResolution": [
+        {
+            "input": null,
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "config unreachable → compiled-in ADR-010 defaults, never all-out"
+        },
+        {
+            "input": "not-an-object",
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "malformed payload → defaults"
+        },
+        {
+            "input": [],
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "array payload → defaults"
+        },
+        {
+            "input": {},
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "empty payload → defaults"
+        },
+        {
+            "input": {
+                "unrelated": "key"
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "unknown keys ignored"
+        },
+        {
+            "input": {
+                "observabilityEnabled": false,
+                "observabilityBrowserLogSamplingRatio": 0.25,
+                "observabilityMinimumLogLevel": "warn",
+                "observabilityTraceSamplingRatio": 0.5
+            },
+            "expected": {
+                "enabled": false,
+                "browserLogSamplingRatio": 0.25,
+                "minimumLogLevel": "WARN",
+                "traceSamplingRatio": 0.5
+            }
+        },
+        {
+            "input": {
+                "observabilityEnabled": "false",
+                "observabilityBrowserLogSamplingRatio": "0.25",
+                "observabilityTraceSamplingRatio": "1"
+            },
+            "expected": {
+                "enabled": false,
+                "browserLogSamplingRatio": 0.25,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 1
+            },
+            "why": "public config may round-trip values as strings"
+        },
+        {
+            "input": {
+                "observabilityBrowserLogSamplingRatio": 1.5
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": ">1 clamps to 1"
+        },
+        {
+            "input": {
+                "observabilityBrowserLogSamplingRatio": -1
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 0,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "negative clamps to 0"
+        },
+        {
+            "input": {
+                "observabilityBrowserLogSamplingRatio": "NaN"
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "NaN is malformed → default, NOT 0"
+        },
+        {
+            "input": {
+                "observabilityBrowserLogSamplingRatio": "banana"
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "unparseable → default"
+        },
+        {
+            "input": {
+                "observabilityBrowserLogSamplingRatio": null
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "null → default"
+        },
+        {
+            "input": {
+                "observabilityBrowserLogSamplingRatio": true
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "wrong type → default"
+        },
+        {
+            "input": {
+                "observabilityMinimumLogLevel": "bogus"
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "typo'd level → default floor, not INFO-by-coincidence"
+        },
+        {
+            "input": {
+                "observabilityMinimumLogLevel": "FATAL"
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "FATAL",
+                "traceSamplingRatio": 0.1
+            }
+        },
+        {
+            "input": {
+                "observabilityEnabled": "yes"
+            },
+            "expected": {
+                "enabled": true,
+                "browserLogSamplingRatio": 1,
+                "minimumLogLevel": "INFO",
+                "traceSamplingRatio": 0.1
+            },
+            "why": "only true/false strings coerce"
+        }
+    ],
+    "shouldEmitLog": [
+        {
+            "input": {
+                "level": "error",
+                "sessionId": "session-out",
+                "enabled": false,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 1
+            },
+            "expected": false,
+            "why": "kill switch beats everything"
+        },
+        {
+            "input": {
+                "level": "debug",
+                "sessionId": "any",
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 1
+            },
+            "expected": false,
+            "why": "below minimum level"
+        },
+        {
+            "input": {
+                "level": "error",
+                "sessionId": "session-out",
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 0
+            },
+            "expected": true,
+            "why": "errors are always 100%"
+        },
+        {
+            "input": {
+                "level": "warning",
+                "sessionId": "session-out",
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 0
+            },
+            "expected": true,
+            "why": "warnings are always 100%"
+        },
+        {
+            "input": {
+                "level": "fatal",
+                "sessionId": "session-out",
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 0
+            },
+            "expected": true
+        },
+        {
+            "input": {
+                "level": "error",
+                "sessionId": "session-out",
+                "enabled": true,
+                "minimumLevel": "FATAL",
+                "logSamplingRatio": 1
+            },
+            "expected": false,
+            "why": "min level outranks always-on"
+        },
+        {
+            "input": {
+                "level": "info",
+                "sessionId": "session-out",
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 0.5
+            },
+            "expected": false,
+            "why": "session sampled out"
+        },
+        {
+            "input": {
+                "level": "info",
+                "sessionId": "session-out",
+                "traceSampled": true,
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 0
+            },
+            "expected": true,
+            "why": "trace decision wins"
+        },
+        {
+            "input": {
+                "level": "info",
+                "sessionId": "session-out",
+                "traceSampled": false,
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 1
+            },
+            "expected": false,
+            "why": "trace decision wins"
+        },
+        {
+            "input": {
+                "level": "info",
+                "sessionId": "anything",
+                "enabled": true,
+                "minimumLevel": "INFO",
+                "logSamplingRatio": 1
+            },
+            "expected": true,
+            "why": "ratio 1.0 never drops"
+        }
+    ]
+}
