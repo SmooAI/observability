@@ -47,7 +47,7 @@ thiserror = "2"
 # opentelemetry-http is pulled with no features — we only need the `HttpClient`
 # trait to implement it ourselves (the `reqwest` feature, which impls it for
 # reqwest::Client, is no longer used).
-opentelemetry = { version = "0.32", features = ["trace", "metrics"] }
+opentelemetry = { version = "0.32", features = ["trace", "metrics", "logs"] }
 # The two `experimental_*_with_async_runtime` features expose the async-runtime
 # batch span processor + periodic metric reader used in `otel.rs`. They are
 # REQUIRED for correctness, not a nicety: the default (thread-based) processors
@@ -59,11 +59,16 @@ opentelemetry = { version = "0.32", features = ["trace", "metrics"] }
 opentelemetry_sdk = { version = "0.32", features = [
     "trace",
     "metrics",
+    "logs",
     "rt-tokio",
     "experimental_trace_batch_span_processor_with_async_runtime",
     "experimental_metrics_periodicreader_with_async_runtime",
+    # Same reactor-panic rationale as traces/metrics (SMOODEV-2045): the DEFAULT
+    # `BatchLogProcessor` drives export with `block_on` on a bare OS thread where
+    # our reqwest-backed exporter has no Tokio reactor and aborts the process.
+    "experimental_logs_batch_log_processor_with_async_runtime",
 ] }
-opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "http-json"], default-features = false }
+opentelemetry-otlp = { version = "0.32", features = ["trace", "metrics", "logs", "http-json"], default-features = false }
 opentelemetry-http = { version = "0.32", default-features = false }
 opentelemetry-semantic-conventions = "0.32"
 
@@ -77,6 +82,14 @@ pin-project-lite = { version = "0.2", optional = true }
 # 0.5 supports reqwest 0.13 (this crate's pin).
 reqwest-middleware = { version = "0.5", optional = true }
 
+# The STANDARD tracing→OTel-log bridge: a `tracing_subscriber::Layer` that turns
+# every `tracing` event into an OTel `LogRecord` on our `SdkLoggerProvider`. The
+# SDK logger enriches each record's trace_id/span_id from the ACTIVE
+# `opentelemetry::Context` at emit time, so a log fired inside one of this crate's
+# spans (tower/gen_ai/reqwest, all OTel-native) is correlated automatically. The
+# host installs the layer via `OtelSdkHandle::tracing_appender_layer()`.
+opentelemetry-appender-tracing = "0.32"
+
 [features]
 default = []
 # OTel server-span layer for Tower/Axum services.
@@ -89,3 +102,9 @@ reqwest-middleware = ["dep:reqwest-middleware", "dep:reqwest"]
 [dev-dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "test-util"] }
 wiremock = "0.6"
+# Logs signal tests: emit `tracing` events through the bridge and assert on the
+# captured records. `testing` unlocks `InMemoryLogExporter`; the feature unifies
+# onto the normal `opentelemetry_sdk` dep only when building test targets.
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["registry", "std"] }
+opentelemetry_sdk = { version = "0.32", features = ["testing"] }
