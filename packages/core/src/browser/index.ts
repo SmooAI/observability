@@ -17,6 +17,7 @@ export { registerBrowserGlobalHandlers } from './global-handlers';
 export { installFetchBreadcrumbs, installNavigationBreadcrumbs } from './breadcrumbs';
 export { installConsoleErrorTap } from './console-tap';
 export { makeBrowserTransport } from './transport';
+export { installWebVitals, recordWebVital, type InstallWebVitalsOptions } from './web-vitals';
 
 // Auto-wire on init. The Client.init implementation lives in core/client.ts
 // and stores options; we hook into it here by re-defining the init behavior
