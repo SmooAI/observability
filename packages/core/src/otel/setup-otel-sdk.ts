@@ -10,15 +10,18 @@
  * tests and lazy boots don't accidentally double-register exporters.
  */
 
+import { logs } from '@opentelemetry/api-logs';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
+import { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { Resource } from '@opentelemetry/resources';
+import { BatchLogRecordProcessor, LoggerProvider } from '@opentelemetry/sdk-logs';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 import type { TokenProvider } from '../auth/token-provider';
-import { AuthInjectingMetricExporter, AuthInjectingTraceExporter } from './auth-injecting-exporter';
+import { AuthInjectingLogExporter, AuthInjectingMetricExporter, AuthInjectingTraceExporter } from './auth-injecting-exporter';
 
 export interface SetupOtelOptions {
     /** Service name surfaced in spans (e.g. 'smoo-backend', 'smoo-web'). */
@@ -69,11 +72,21 @@ export interface SetupOtelOptions {
      * from the trace URL or env vars.
      */
     otlpMetricsEndpoint?: string;
+    /**
+     * Endpoint for logs, if you want it different from the trace endpoint
+     * base. Defaults to `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` / `_ENDPOINT` env
+     * vars. When neither this nor the env vars resolve to a logs endpoint the
+     * logs signal is not wired (no LoggerProvider is registered), so app
+     * logger lines emitted through `@opentelemetry/api-logs` stay no-ops.
+     */
+    otlpLogsEndpoint?: string;
 }
 
 export interface OtelSdkHandle {
     /** The underlying NodeSDK so callers can shutdown / flush in their own lifecycle. */
     sdk: NodeSDK;
+    /** The logs LoggerProvider, if the logs signal was wired (a logs endpoint resolved). */
+    loggerProvider?: LoggerProvider;
     /**
      * Force-flush spans now. Returns when the exporter has acknowledged or
      * the timeout elapses. Wired by the host into SIGTERM / `beforeExit`.
@@ -92,6 +105,7 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
 
     const traceEndpoint = options.otlpEndpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
     const metricEndpoint = options.otlpMetricsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+    const logEndpoint = options.otlpLogsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
 
     // SMOODEV-1206: when a TokenProvider is passed, route through the
     // auth-injecting exporters. They ask the TokenProvider for a fresh
@@ -128,6 +142,23 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
         ...(options.environment ? { 'deployment.environment.name': options.environment } : {}),
     });
 
+    // Logs signal — same OTLP/HTTP transport + same auth path as traces.
+    // Only wired when a logs endpoint resolves; otherwise the global
+    // LoggerProvider stays the api-logs NoopLoggerProvider so app logger
+    // lines emitted through `@opentelemetry/api-logs` are cheap no-ops.
+    // The LogRecord SDK stamps trace_id/span_id from the active span context
+    // at emit time (W3C ids), giving trace↔log correlation for free.
+    let loggerProvider: LoggerProvider | undefined;
+    if (logEndpoint) {
+        const logExporter =
+            options.tokenProvider
+                ? new AuthInjectingLogExporter({ url: logEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
+                : new OTLPLogExporter({ url: logEndpoint, headers: options.otlpHeaders });
+        loggerProvider = new LoggerProvider({ resource });
+        loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter));
+        logs.setGlobalLoggerProvider(loggerProvider);
+    }
+
     const instrumentations = options.disableAutoInstrumentations
         ? []
         : [
@@ -152,6 +183,7 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
 
     const handle: OtelSdkHandle = {
         sdk,
+        loggerProvider,
         async flush(timeoutMs = 2_000) {
             // NodeSDK doesn't expose a public flush; shutdown drains the exporter
             // queue. Wrap in Promise.race so a slow exporter doesn't stall SIGTERM.
@@ -163,6 +195,8 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
                     if (typeof exporterWithFlush.forceFlush === 'function') {
                         await exporterWithFlush.forceFlush();
                     }
+                    // Drain the batched log records too so logs aren't lost on SIGTERM.
+                    await loggerProvider?.forceFlush();
                 } catch {
                     /* swallow — flush is best-effort */
                 }
@@ -178,6 +212,7 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
         async shutdown() {
             try {
                 await sdk.shutdown();
+                await loggerProvider?.shutdown();
             } catch {
                 /* swallow */
             } finally {

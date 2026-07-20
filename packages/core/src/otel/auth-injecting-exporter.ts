@@ -32,9 +32,10 @@
 
 import smooFetch, { HTTPResponseError } from '@smooai/fetch';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
-import { JsonMetricsSerializer, JsonTraceSerializer } from '@opentelemetry/otlp-transformer';
+import { JsonLogsSerializer, JsonMetricsSerializer, JsonTraceSerializer } from '@opentelemetry/otlp-transformer';
 import type { ResourceMetrics, PushMetricExporter } from '@opentelemetry/sdk-metrics';
 import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base';
+import type { LogRecordExporter, ReadableLogRecord } from '@opentelemetry/sdk-logs';
 import type { TokenProvider } from '../auth/token-provider';
 
 /**
@@ -207,4 +208,14 @@ export class AuthInjectingMetricExporter extends BaseAuthInjectingExporter<Resou
 
     selectAggregation = undefined;
     selectAggregationTemporality = undefined;
+}
+
+export class AuthInjectingLogExporter extends BaseAuthInjectingExporter<ReadableLogRecord> implements LogRecordExporter {
+    protected serialize(items: ReadableLogRecord[]): Uint8Array {
+        return JsonLogsSerializer.serializeRequest(items) ?? new Uint8Array();
+    }
+
+    export(logs: ReadableLogRecord[], resultCallback: (result: ExportResult) => void): void {
+        this.dispatch(logs, resultCallback);
+    }
 }

@@ -16,11 +16,12 @@
  *
  *   SMOOAI_OBSERVABILITY_ENDPOINT   — base URL of the ingest API (e.g.
  *                                     "https://api.smoo.ai"). The SDK
- *                                     appends `/v1/traces` and
- *                                     `/v1/metrics`. May also be set per-
+ *                                     appends `/v1/traces`, `/v1/metrics`,
+ *                                     and `/v1/logs`. May also be set per-
  *                                     signal via the standard
  *                                     `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`
- *                                     / `_METRICS_ENDPOINT` env vars.
+ *                                     / `_METRICS_ENDPOINT` / `_LOGS_ENDPOINT`
+ *                                     env vars.
  *
  * ## Auth (pick ONE; pre-minted JWT wins if both are present)
  *
@@ -106,6 +107,7 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
         endpoint: overrides.endpoint ?? process.env.SMOOAI_OBSERVABILITY_ENDPOINT,
         tracesEndpoint: overrides.tracesEndpoint ?? process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
         metricsEndpoint: overrides.metricsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
+        logsEndpoint: overrides.logsEndpoint ?? process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
         token: overrides.token ?? process.env.SMOOAI_OBSERVABILITY_TOKEN,
         authUrl: overrides.authUrl ?? process.env.SMOOAI_OBSERVABILITY_AUTH_URL,
         clientId: overrides.clientId ?? process.env.SMOOAI_OBSERVABILITY_CLIENT_ID,
@@ -163,6 +165,7 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
 
         const tracesEndpoint = env.tracesEndpoint ?? (env.endpoint ? `${stripTrailingSlash(env.endpoint)}/v1/traces` : undefined);
         const metricsEndpoint = env.metricsEndpoint ?? (env.endpoint ? `${stripTrailingSlash(env.endpoint)}/v1/metrics` : undefined);
+        const logsEndpoint = env.logsEndpoint ?? (env.endpoint ? `${stripTrailingSlash(env.endpoint)}/v1/logs` : undefined);
 
         // Set process.env so any *other* OTel-aware code in the process
         // (e.g. third-party libraries that read the env directly) sees the
@@ -174,6 +177,9 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
         if (metricsEndpoint && !process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT) {
             process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT = metricsEndpoint;
         }
+        if (logsEndpoint && !process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT) {
+            process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT = logsEndpoint;
+        }
 
         const otelOptions: SetupOtelOptions = {
             serviceName: env.serviceName ?? 'smoo-service',
@@ -181,6 +187,7 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
             release: env.release,
             otlpEndpoint: tracesEndpoint,
             otlpMetricsEndpoint: metricsEndpoint,
+            otlpLogsEndpoint: logsEndpoint,
             otlpHeaders: sharedHeaders,
             tokenProvider,
         };
@@ -212,6 +219,7 @@ export interface BootstrapEnv {
     endpoint?: string;
     tracesEndpoint?: string;
     metricsEndpoint?: string;
+    logsEndpoint?: string;
     token?: string;
     authUrl?: string;
     clientId?: string;
