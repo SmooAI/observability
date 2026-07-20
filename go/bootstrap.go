@@ -38,6 +38,7 @@ type BootstrapEnv struct {
 	Endpoint        string
 	TracesEndpoint  string
 	MetricsEndpoint string
+	LogsEndpoint    string
 	Token           string
 	AuthURL         string
 	ClientID        string
@@ -116,6 +117,10 @@ func Bootstrap(ctx context.Context, overrides *BootstrapEnv) BootstrapResult {
 	if metricEndpoint == "" && env.Endpoint != "" {
 		metricEndpoint = strings.TrimRight(env.Endpoint, "/") + "/v1/metrics"
 	}
+	logEndpoint := env.LogsEndpoint
+	if logEndpoint == "" && env.Endpoint != "" {
+		logEndpoint = strings.TrimRight(env.Endpoint, "/") + "/v1/logs"
+	}
 
 	otelHandle := SetupOtelSDK(ctx, SetupOtelOptions{
 		ServiceName:     env.ServiceName,
@@ -123,6 +128,7 @@ func Bootstrap(ctx context.Context, overrides *BootstrapEnv) BootstrapResult {
 		Release:         env.Release,
 		TracesEndpoint:  traceEndpoint,
 		MetricsEndpoint: metricEndpoint,
+		LogsEndpoint:    logEndpoint,
 		Headers:         headers,
 		TokenProvider:   tokenProvider,
 	})
@@ -163,6 +169,7 @@ func resolveEnv(o *BootstrapEnv) BootstrapEnv {
 		Endpoint:        pick(o.Endpoint, "SMOOAI_OBSERVABILITY_ENDPOINT"),
 		TracesEndpoint:  pick(o.TracesEndpoint, "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"),
 		MetricsEndpoint: pick(o.MetricsEndpoint, "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"),
+		LogsEndpoint:    pick(o.LogsEndpoint, "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"),
 		Token:           pick(o.Token, "SMOOAI_OBSERVABILITY_TOKEN"),
 		AuthURL:         pick(o.AuthURL, "SMOOAI_OBSERVABILITY_AUTH_URL"),
 		ClientID:        pick(o.ClientID, "SMOOAI_OBSERVABILITY_CLIENT_ID"),
