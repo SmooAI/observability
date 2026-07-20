@@ -9,8 +9,9 @@
 //! ## Env vars (identical names to the TS SDK)
 //!
 //! - `SMOOAI_OBSERVABILITY_ENDPOINT` — base ingest URL (e.g. `https://api.smoo.ai`).
-//!   `/v1/traces` and `/v1/metrics` are appended. Per-signal overrides via the
-//!   standard `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` / `_METRICS_ENDPOINT`.
+//!   `/v1/traces`, `/v1/metrics`, and `/v1/logs` are appended. Per-signal
+//!   overrides via the standard `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` /
+//!   `_METRICS_ENDPOINT` / `_LOGS_ENDPOINT`.
 //! - Auth (pick one; pre-minted token wins):
 //!   - `SMOOAI_OBSERVABILITY_TOKEN` — pre-minted Bearer JWT (not refreshed).
 //!   - `SMOOAI_OBSERVABILITY_AUTH_URL` + `_CLIENT_ID` + `_CLIENT_SECRET` —
@@ -36,6 +37,7 @@ pub struct BootstrapEnv {
     pub endpoint: Option<String>,
     pub traces_endpoint: Option<String>,
     pub metrics_endpoint: Option<String>,
+    pub logs_endpoint: Option<String>,
     pub token: Option<String>,
     pub auth_url: Option<String>,
     pub client_id: Option<String>,
@@ -54,6 +56,7 @@ impl BootstrapEnv {
             endpoint: env::var("SMOOAI_OBSERVABILITY_ENDPOINT").ok(),
             traces_endpoint: env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT").ok(),
             metrics_endpoint: env::var("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT").ok(),
+            logs_endpoint: env::var("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT").ok(),
             token: env::var("SMOOAI_OBSERVABILITY_TOKEN").ok(),
             auth_url: env::var("SMOOAI_OBSERVABILITY_AUTH_URL").ok(),
             client_id: env::var("SMOOAI_OBSERVABILITY_CLIENT_ID").ok(),
@@ -127,6 +130,11 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
             .as_ref()
             .map(|e| format!("{}/v1/metrics", strip_trailing_slash(e)))
     });
+    let logs_endpoint = env.logs_endpoint.clone().or_else(|| {
+        env.endpoint
+            .as_ref()
+            .map(|e| format!("{}/v1/logs", strip_trailing_slash(e)))
+    });
 
     // Auth: static token wins; otherwise build a per-request TokenProvider and
     // warm it so the first export doesn't pay the round-trip.
@@ -157,10 +165,12 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
         warn("no auth configured (set SMOOAI_OBSERVABILITY_TOKEN or _AUTH_URL/_CLIENT_ID/_CLIENT_SECRET); OTLP exports will be unauthenticated");
     }
 
-    let otel = if traces_endpoint.is_some() || metrics_endpoint.is_some() {
+    let otel = if traces_endpoint.is_some() || metrics_endpoint.is_some() || logs_endpoint.is_some()
+    {
         let mut opts = SetupOtelOptions::new(service_name);
         opts.otlp_traces_endpoint = traces_endpoint;
         opts.otlp_metrics_endpoint = metrics_endpoint;
+        opts.otlp_logs_endpoint = logs_endpoint;
         opts.otlp_headers = static_headers;
         opts.environment = environment.clone();
         opts.release = release.clone();

@@ -27,15 +27,22 @@
 
 use crate::auth::TokenProvider;
 use once_cell::sync::OnceCell;
+use opentelemetry_appender_tracing::layer::OpenTelemetryTracingBridge;
 use opentelemetry_otlp::{
-    MetricExporter, Protocol, SpanExporter, WithExportConfig, WithHttpConfig,
+    LogExporter, MetricExporter, Protocol, SpanExporter, WithExportConfig, WithHttpConfig,
 };
+use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
 use opentelemetry_sdk::metrics::SdkMeterProvider;
 use opentelemetry_sdk::runtime;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use opentelemetry_sdk::Resource;
 use std::collections::HashMap;
 use std::time::Duration;
+
+/// The tracing→OTel-log bridge layer type, concretely parameterized over this
+/// crate's SDK logger provider. Hosts add it to their `tracing_subscriber`
+/// registry to route `tracing` events into the OTLP logs pipeline.
+pub type TracingAppenderLayer = OpenTelemetryTracingBridge<SdkLoggerProvider, SdkLogger>;
 
 mod auth_client;
 pub use auth_client::AuthInjectingHttpClient;
@@ -50,6 +57,9 @@ pub struct SetupOtelOptions {
     /// Fully-qualified OTLP/HTTP endpoint for metrics. When `None`, metrics are
     /// not exported.
     pub otlp_metrics_endpoint: Option<String>,
+    /// Fully-qualified OTLP/HTTP endpoint for logs (e.g.
+    /// `https://api.smoo.ai/v1/logs`). When `None`, logs are not exported.
+    pub otlp_logs_endpoint: Option<String>,
     /// Static headers merged onto every export (e.g. a pre-minted
     /// `authorization` Bearer, or `user-agent`).
     pub otlp_headers: HashMap<String, String>,
@@ -70,6 +80,7 @@ impl SetupOtelOptions {
             service_name: service_name.into(),
             otlp_traces_endpoint: None,
             otlp_metrics_endpoint: None,
+            otlp_logs_endpoint: None,
             otlp_headers: HashMap::new(),
             environment: None,
             release: None,
@@ -85,16 +96,20 @@ impl SetupOtelOptions {
 pub struct OtelSdkHandle {
     tracer_provider: Option<SdkTracerProvider>,
     meter_provider: Option<SdkMeterProvider>,
+    logger_provider: Option<SdkLoggerProvider>,
 }
 
 impl OtelSdkHandle {
-    /// Force-flush spans + metrics now. Best-effort; errors are swallowed.
+    /// Force-flush spans + metrics + logs now. Best-effort; errors are swallowed.
     pub fn flush(&self) {
         if let Some(tp) = &self.tracer_provider {
             let _ = tp.force_flush();
         }
         if let Some(mp) = &self.meter_provider {
             let _ = mp.force_flush();
+        }
+        if let Some(lp) = &self.logger_provider {
+            let _ = lp.force_flush();
         }
     }
 
@@ -106,6 +121,29 @@ impl OtelSdkHandle {
         if let Some(mp) = &self.meter_provider {
             let _ = mp.shutdown();
         }
+        if let Some(lp) = &self.logger_provider {
+            let _ = lp.shutdown();
+        }
+    }
+
+    /// The tracing→OTel-log bridge layer for this SDK's logs pipeline, or `None`
+    /// when logs are disabled (no logs endpoint configured). Add it to the host's
+    /// `tracing_subscriber` registry so `tracing` events become OTLP log records:
+    ///
+    /// ```ignore
+    /// use tracing_subscriber::prelude::*;
+    /// if let Some(layer) = handle.tracing_appender_layer() {
+    ///     tracing_subscriber::registry().with(layer).init();
+    /// }
+    /// ```
+    ///
+    /// Records emitted inside an active OTel span (the tower/gen_ai/reqwest spans
+    /// this crate creates) carry that span's `trace_id`/`span_id` automatically —
+    /// the SDK logger reads `opentelemetry::Context::current()` at emit time.
+    pub fn tracing_appender_layer(&self) -> Option<TracingAppenderLayer> {
+        self.logger_provider
+            .as_ref()
+            .map(OpenTelemetryTracingBridge::new)
     }
 }
 
@@ -190,7 +228,7 @@ fn build_and_install(options: SetupOtelOptions) -> OtelSdkHandle {
                 .with_interval(options.metric_export_interval)
                 .build();
             let mp = SdkMeterProvider::builder()
-                .with_resource(resource)
+                .with_resource(resource.clone())
                 .with_reader(reader)
                 .build();
             opentelemetry::global::set_meter_provider(mp.clone());
@@ -199,9 +237,29 @@ fn build_and_install(options: SetupOtelOptions) -> OtelSdkHandle {
         None => None,
     };
 
+    // Logs pipeline — same async-runtime processor rationale as traces/metrics
+    // above (SMOODEV-2045). Unlike traces/metrics there is no stable global logger
+    // provider to install; the provider is handed to the host via
+    // `OtelSdkHandle::tracing_appender_layer()`, which builds the tracing bridge
+    // from it. trace_id/span_id correlation is the SDK logger's job — it reads the
+    // active `opentelemetry::Context` at emit time.
+    let logger_provider = match build_log_exporter(&options) {
+        Some(exporter) => {
+            use opentelemetry_sdk::logs::log_processor_with_async_runtime::BatchLogProcessor;
+            let processor = BatchLogProcessor::builder(exporter, runtime::Tokio).build();
+            let lp = SdkLoggerProvider::builder()
+                .with_resource(resource)
+                .with_log_processor(processor)
+                .build();
+            Some(lp)
+        }
+        None => None,
+    };
+
     OtelSdkHandle {
         tracer_provider,
         meter_provider,
+        logger_provider,
     }
 }
 
@@ -252,6 +310,25 @@ fn build_metric_exporter(options: &SetupOtelOptions) -> Option<MetricExporter> {
     }
 }
 
+fn build_log_exporter(options: &SetupOtelOptions) -> Option<LogExporter> {
+    let endpoint = options.otlp_logs_endpoint.clone()?;
+    let client = build_http_client(options);
+    let result = LogExporter::builder()
+        .with_http()
+        .with_protocol(Protocol::HttpJson)
+        .with_endpoint(endpoint)
+        .with_headers(options.otlp_headers.clone())
+        .with_http_client(client)
+        .build();
+    match result {
+        Ok(exporter) => Some(exporter),
+        Err(e) => {
+            warn(&format!("failed to build log exporter: {e}"));
+            None
+        }
+    }
+}
+
 pub(crate) fn warn(message: &str) {
     use std::io::Write;
     let _ = writeln!(std::io::stderr(), "[@smooai/observability/otel] {message}");
@@ -263,12 +340,30 @@ mod tests {
 
     #[test]
     fn no_endpoints_yields_disabled_handle() {
-        // A fresh handle built with no endpoints must have neither provider and
-        // must not panic. (We can't call the global-installing setup_otel_sdk in
-        // a unit test without polluting global state, so exercise build paths.)
+        // A fresh handle built with no endpoints must have no provider on any
+        // signal and must not panic. (We can't call the global-installing
+        // setup_otel_sdk in a unit test without polluting global state, so
+        // exercise build paths.)
         let opts = SetupOtelOptions::new("test-svc");
         assert!(build_span_exporter(&opts).is_none());
         assert!(build_metric_exporter(&opts).is_none());
+        assert!(build_log_exporter(&opts).is_none());
+    }
+
+    #[test]
+    fn disabled_logs_pipeline_yields_no_appender_layer() {
+        // The logs pipeline must be a strict no-op when no logs endpoint is
+        // configured: no logger provider, so no tracing bridge for the host to
+        // install. Existing traces/metrics behavior is untouched.
+        let handle = OtelSdkHandle {
+            tracer_provider: None,
+            meter_provider: None,
+            logger_provider: None,
+        };
+        assert!(handle.tracing_appender_layer().is_none());
+        // Flush/shutdown on a fully-disabled handle are safe no-ops.
+        handle.flush();
+        handle.shutdown();
     }
 
     #[test]
