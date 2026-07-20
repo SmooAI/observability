@@ -24,6 +24,14 @@ public sealed class SetupOtelOptions
     /// <summary>OTLP/HTTP endpoint for metrics. Full URL incl. <c>/v1/metrics</c>.</summary>
     public string? OtlpMetricsEndpoint { get; set; }
 
+    /// <summary>
+    /// OTLP/HTTP endpoint for logs. Full URL incl. <c>/v1/logs</c>. Consumed by the
+    /// <c>ILoggingBuilder.AddSmooObservability</c> extension — the logs signal wires
+    /// into the host's logging pipeline, not the standalone <see cref="ObservabilitySdk.Setup"/>
+    /// tracer/meter providers.
+    /// </summary>
+    public string? OtlpLogsEndpoint { get; set; }
+
     /// <summary>Deployment environment string ('production', 'staging', 'dev', 'local').</summary>
     public string? Environment { get; set; }
 
@@ -172,7 +180,12 @@ public static class ObservabilitySdk
         }
     }
 
-    private static OtelSdkHandle Build(SetupOtelOptions options)
+    /// <summary>
+    /// Build the shared OTel <see cref="ResourceBuilder"/> — <c>service.name</c> plus
+    /// optional <c>service.version</c> / <c>deployment.environment.name</c>. Reused by
+    /// traces, metrics, and the logs signal so all three carry the same resource.
+    /// </summary>
+    internal static ResourceBuilder BuildResource(SetupOtelOptions options)
     {
         var resourceBuilder = ResourceBuilder.CreateDefault().AddService(options.ServiceName);
         var resourceAttrs = new List<KeyValuePair<string, object>>();
@@ -188,6 +201,12 @@ public static class ObservabilitySdk
         {
             resourceBuilder.AddAttributes(resourceAttrs);
         }
+        return resourceBuilder;
+    }
+
+    private static OtelSdkHandle Build(SetupOtelOptions options)
+    {
+        var resourceBuilder = BuildResource(options);
 
         TracerProvider? tracerProvider = null;
         MeterProvider? meterProvider = null;
@@ -243,7 +262,7 @@ public static class ObservabilitySdk
         return new OtelSdkHandle(tracerProvider, meterProvider);
     }
 
-    private static void ConfigureExporter(OtlpExporterOptions exporterOptions, string endpoint, SetupOtelOptions options)
+    internal static void ConfigureExporter(OtlpExporterOptions exporterOptions, string endpoint, SetupOtelOptions options)
     {
         exporterOptions.Endpoint = new Uri(endpoint);
         exporterOptions.Protocol = OtlpExportProtocol.HttpProtobuf;
