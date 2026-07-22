@@ -6,7 +6,10 @@
             "outputs": ["dist/**"]
         },
         "test": {
-            "dependsOn": ["^build"]
+            "dependsOn": ["^build"],
+            // ADR-097: the parity corpus lives outside any package, so name it explicitly
+            // or turbo serves a cached green when only the corpus changed.
+            "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/parity/sampling-corpus.json"]
         },
         "typecheck": {
             "dependsOn": ["^build"]

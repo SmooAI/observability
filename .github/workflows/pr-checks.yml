@@ -30,6 +30,7 @@ jobs:
               with:
                   filters: |
                       ts:
+                          - 'parity/**'
                           - 'packages/**'
                           - 'package.json'
                           - 'pnpm-lock.yaml'
@@ -39,15 +40,19 @@ jobs:
                           - '.changeset/**'
                           - '.github/workflows/pr-checks.yml'
                       rust:
+                          - 'parity/**'
                           - 'rust/**'
                           - '.github/workflows/pr-checks.yml'
                       go:
+                          - 'parity/**'
                           - 'go/**'
                           - '.github/workflows/pr-checks.yml'
                       python:
+                          - 'parity/**'
                           - 'python/**'
                           - '.github/workflows/pr-checks.yml'
                       dotnet:
+                          - 'parity/**'
                           - 'dotnet/**'
                           - '.github/workflows/pr-checks.yml'
 

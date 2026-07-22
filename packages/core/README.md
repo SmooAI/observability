@@ -79,6 +79,30 @@ Client.addBreadcrumb('fetch', 'POST /api/checkout 502', { method: 'POST', status
 Client.setUser({ id: 'user_abc', orgId: 'org_xyz', sessionId: 'sess_123' });
 ```
 
+### Sampling and telemetry settings (ADR-097)
+
+Browser logs are sampled **by session, never by line** — the decision is made
+once per session (or inherited from the trace, where one exists) and applies to
+every line under it, so any trace you can open has 100% of its log lines.
+Warnings and errors are always kept. Server-side logs are not sampled.
+
+```ts
+import { loadTelemetrySettings, sampleDecision, shouldEmitLog } from '@smooai/observability';
+
+// Settings come from @smooai/config public-tier keys. The SDK never imports
+// the config client — you inject a provider, so it stays usable offline.
+const settings = await loadTelemetrySettings(() => publicConfig.getAll());
+// ...unreachable / malformed / out-of-range → compiled-in ADR-010 defaults.
+// Never "sample everything out".
+
+shouldEmitLog({ level: 'info', sessionId, ...settings, minimumLevel: settings.minimumLogLevel, logSamplingRatio: settings.browserLogSamplingRatio });
+```
+
+`sampleDecision(id, ratio)` is FNV-1a 32-bit over the UTF-8 bytes of the id —
+deterministic, stable for a page's lifetime, and reproduced byte-identically by
+the Rust / Python / Go / .NET SDKs against
+[`parity/sampling-corpus.json`](../../parity/README.md).
+
 ## What it does NOT do
 
 - Does not capture `console.log` / `console.info` / `console.warn`
