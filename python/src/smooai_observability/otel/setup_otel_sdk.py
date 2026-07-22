@@ -36,6 +36,7 @@ class SetupOtelOptions:
     service_name: str = DEFAULT_SERVICE_NAME
     otlp_endpoint: str | None = None
     otlp_metrics_endpoint: str | None = None
+    otlp_logs_endpoint: str | None = None
     otlp_headers: dict[str, str] = field(default_factory=dict)
     environment: str | None = None
     release: str | None = None
@@ -49,10 +50,14 @@ class SetupOtelOptions:
 class OtelSdkHandle:
     tracer_provider: Any = None
     meter_provider: Any = None
+    logger_provider: Any = None
+    # The stdlib ``logging.Handler`` bridging root logging → OTLP logs. Stored so
+    # ``shutdown`` can detach it from the root logger (undo the global mutation).
+    log_handler: Any = None
     enabled: bool = False
 
     def flush(self, timeout_millis: int = 2_000) -> None:
-        for provider in (self.tracer_provider, self.meter_provider):
+        for provider in (self.tracer_provider, self.meter_provider, self.logger_provider):
             if provider is None:
                 continue
             try:
@@ -62,7 +67,14 @@ class OtelSdkHandle:
 
     def shutdown(self) -> None:
         global _installed
-        for provider in (self.tracer_provider, self.meter_provider):
+        if self.log_handler is not None:
+            try:
+                import logging
+
+                logging.getLogger().removeHandler(self.log_handler)
+            except Exception:
+                pass
+        for provider in (self.tracer_provider, self.meter_provider, self.logger_provider):
             if provider is None:
                 continue
             try:
@@ -91,8 +103,13 @@ def setup_otel_sdk(options: SetupOtelOptions | None = None, **kwargs: Any) -> Ot
     opts = options or SetupOtelOptions(**kwargs)
 
     try:
+        import logging
+
         from opentelemetry import metrics as otel_metrics
         from opentelemetry import trace as otel_trace
+        from opentelemetry._logs import set_logger_provider
+        from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler
+        from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
         from opentelemetry.sdk.metrics import MeterProvider
         from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
         from opentelemetry.sdk.resources import Resource
@@ -104,10 +121,12 @@ def setup_otel_sdk(options: SetupOtelOptions | None = None, **kwargs: Any) -> Ot
         return _installed
 
     try:
+        from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
         from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
         from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
         from .auth_injecting_exporter import (
+            AuthInjectingLogExporter,
             AuthInjectingMetricExporter,
             AuthInjectingTraceExporter,
         )
@@ -160,13 +179,38 @@ def setup_otel_sdk(options: SetupOtelOptions | None = None, **kwargs: Any) -> Ot
         )
         meter_provider = MeterProvider(resource=resource, metric_readers=[metric_reader])
 
+        # --- logs -----------------------------------------------------------
+        log_endpoint = opts.otlp_logs_endpoint or os.environ.get("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT") or os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+        if opts.token_provider is not None and log_endpoint:
+            log_exporter: Any = AuthInjectingLogExporter(
+                endpoint=log_endpoint,
+                token_provider=opts.token_provider,
+                headers=opts.otlp_headers or None,
+            )
+        elif log_endpoint:
+            log_exporter = OTLPLogExporter(endpoint=log_endpoint, headers=opts.otlp_headers or None)
+        else:
+            log_exporter = OTLPLogExporter(headers=opts.otlp_headers or None)
+
+        logger_provider = LoggerProvider(resource=resource)
+        logger_provider.add_log_record_processor(BatchLogRecordProcessor(log_exporter))
+        # Bridge stdlib logging → OTel log records. The handler reads the ACTIVE
+        # span context per record, so logs emitted inside a span carry its real
+        # W3C trace_id/span_id (verified in tests). Attached to the root logger
+        # so any stdlib logger (including @smooai/logger's bridge) is captured.
+        log_handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
+
         if not opts.skip_start:
             otel_trace.set_tracer_provider(tracer_provider)
             otel_metrics.set_meter_provider(meter_provider)
+            set_logger_provider(logger_provider)
+            logging.getLogger().addHandler(log_handler)
 
         handle = OtelSdkHandle(
             tracer_provider=tracer_provider,
             meter_provider=meter_provider,
+            logger_provider=logger_provider,
+            log_handler=log_handler,
             enabled=True,
         )
         _installed = handle
