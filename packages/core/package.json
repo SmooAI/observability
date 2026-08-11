@@ -2,16 +2,21 @@
     "name": "@smooai/observability",
     "version": "0.13.0",
     "description": "Smoo AI Observability SDK — OTel-first error capture, traces, metrics, and React/Next.js integrations in a single package with subpath exports",
+    "homepage": "https://github.com/SmooAI/observability",
+    "bugs": {
+        "url": "https://github.com/SmooAI/observability/issues"
+    },
     "license": "MIT",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/SmooAI/observability.git",
         "directory": "packages/core"
     },
-    "homepage": "https://github.com/SmooAI/observability",
-    "bugs": {
-        "url": "https://github.com/SmooAI/observability/issues"
-    },
+    "files": [
+        "dist",
+        "README.md",
+        "CHANGELOG.md"
+    ],
     "type": "module",
     "main": "./dist/index.mjs",
     "module": "./dist/index.mjs",
@@ -56,11 +61,9 @@
             "import": "./dist/next-build.mjs"
         }
     },
-    "files": [
-        "dist",
-        "README.md",
-        "CHANGELOG.md"
-    ],
+    "publishConfig": {
+        "access": "public"
+    },
     "scripts": {
         "build": "tsdown",
         "test": "vitest run --passWithNoTests",
@@ -68,7 +71,6 @@
         "lint": "echo \"(lint stub — biome/eslint TBD)\""
     },
     "dependencies": {
-        "@smooai/fetch": "^3.3.10",
         "@opentelemetry/api": "^1.9.0",
         "@opentelemetry/api-logs": "^0.55.0",
         "@opentelemetry/auto-instrumentations-node": "^0.50.0",
@@ -81,19 +83,8 @@
         "@opentelemetry/sdk-logs": "^0.55.0",
         "@opentelemetry/sdk-metrics": "^1.30.0",
         "@opentelemetry/sdk-node": "^0.55.0",
-        "@opentelemetry/semantic-conventions": "^1.30.0"
-    },
-    "peerDependencies": {
-        "next": ">=14",
-        "react": ">=18"
-    },
-    "peerDependenciesMeta": {
-        "next": {
-            "optional": true
-        },
-        "react": {
-            "optional": true
-        }
+        "@opentelemetry/semantic-conventions": "^1.30.0",
+        "@smooai/fetch": "^3.3.10"
     },
     "devDependencies": {
         "@opentelemetry/context-async-hooks": "^1.30.0",
@@ -107,7 +98,16 @@
         "unrun": "^0.3.0",
         "vitest": "^3.1.1"
     },
-    "publishConfig": {
-        "access": "public"
+    "peerDependencies": {
+        "next": ">=14",
+        "react": ">=18"
+    },
+    "peerDependenciesMeta": {
+        "next": {
+            "optional": true
+        },
+        "react": {
+            "optional": true
+        }
     }
 }

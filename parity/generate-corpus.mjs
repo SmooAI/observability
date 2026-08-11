@@ -14,8 +14,8 @@
  * by hand below and derived from the spec, not from the code.
  */
 import { writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const fnv1a32 = (s) => {
     let h = 0x811c9dc5;

@@ -3,14 +3,14 @@
     "version": "0.0.0",
     "private": true,
     "description": "Smoo AI Observability SDK — Sentry-like error tracking for browser and Node with React + Next wrappers",
+    "homepage": "https://github.com/SmooAI/observability",
+    "bugs": {
+        "url": "https://github.com/SmooAI/observability/issues"
+    },
     "license": "MIT",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/SmooAI/observability.git"
-    },
-    "homepage": "https://github.com/SmooAI/observability",
-    "bugs": {
-        "url": "https://github.com/SmooAI/observability/issues"
     },
     "type": "module",
     "scripts": {
@@ -18,8 +18,8 @@
         "test": "turbo run test",
         "typecheck": "turbo run typecheck",
         "lint": "turbo run lint",
-        "format": "prettier --write . --ignore-path .prettierignore",
-        "format:check": "prettier --check . --ignore-path .prettierignore",
+        "format": "oxfmt --write .",
+        "format:check": "oxfmt --check .",
         "changeset": "changeset",
         "ci:publish": "pnpm build && changeset publish",
         "release": "pnpm build && changeset publish"
@@ -27,13 +27,13 @@
     "devDependencies": {
         "@changesets/cli": "^2.27.10",
         "@types/node": "^22",
-        "prettier": "^3.3.0",
+        "oxfmt": "^0.28.0",
         "turbo": "^2.3.0",
         "typescript": "^5.6.0",
         "vitest": "^3.1.1"
     },
-    "packageManager": "pnpm@10.6.1",
     "engines": {
         "node": ">=22"
-    }
+    },
+    "packageManager": "pnpm@10.6.1"
 }

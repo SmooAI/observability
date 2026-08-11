@@ -8,8 +8,16 @@ coverage
 pnpm-lock.yaml
 CHANGELOG.md
 
-# Non-TS language SDKs — each has its own formatter (rustfmt, gofmt, ruff, dotnet format)
+# Read by oxfmt (it picks up .gitignore and .prettierignore by default, which is
+# why this file keeps its name even though prettier itself is gone).
+#
+# Non-TS language SDKs — each has its own formatter (rustfmt, gofmt, ruff, dotnet
+# format). oxfmt skips their SOURCE files by extension, but it will happily
+# reformat a Cargo.toml/package.json inside them if the directory is not listed:
+# it collapsed desktop/Cargo.toml's `members` array onto one line at printWidth
+# 160, which is taplo/cargo's business, not oxfmt's.
 go/
 rust/
 python/
 dotnet/
+desktop/
