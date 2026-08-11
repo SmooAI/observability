@@ -150,10 +150,9 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
     // at emit time (W3C ids), giving trace↔log correlation for free.
     let loggerProvider: LoggerProvider | undefined;
     if (logEndpoint) {
-        const logExporter =
-            options.tokenProvider
-                ? new AuthInjectingLogExporter({ url: logEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
-                : new OTLPLogExporter({ url: logEndpoint, headers: options.otlpHeaders });
+        const logExporter = options.tokenProvider
+            ? new AuthInjectingLogExporter({ url: logEndpoint, tokenProvider: options.tokenProvider, staticHeaders: options.otlpHeaders })
+            : new OTLPLogExporter({ url: logEndpoint, headers: options.otlpHeaders });
         loggerProvider = new LoggerProvider({ resource });
         loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(logExporter));
         logs.setGlobalLoggerProvider(loggerProvider);
