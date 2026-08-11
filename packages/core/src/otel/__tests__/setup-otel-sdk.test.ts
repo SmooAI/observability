@@ -39,4 +39,14 @@ describe('setupOtelSdk', () => {
         const handle = setupOtelSdk({ serviceName: 'test', skipStart: true, disableAutoInstrumentations: true });
         expect(handle.sdk).toBeDefined();
     });
+
+    it('wires the logs signal (LoggerProvider) when a logs endpoint is given', () => {
+        const handle = setupOtelSdk({ serviceName: 'test', skipStart: true, otlpLogsEndpoint: 'https://api.smoo.ai/v1/logs' });
+        expect(handle.loggerProvider).toBeDefined();
+    });
+
+    it('leaves the logs signal unwired (no LoggerProvider) when no logs endpoint resolves', () => {
+        const handle = setupOtelSdk({ serviceName: 'test', skipStart: true });
+        expect(handle.loggerProvider).toBeUndefined();
+    });
 });
