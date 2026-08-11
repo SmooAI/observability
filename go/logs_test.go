@@ -6,6 +6,7 @@ import (
 	"sync"
 	"testing"
 
+	"go.opentelemetry.io/otel/log"
 	logglobal "go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -63,8 +64,13 @@ func TestSlogHandlerCorrelatesWithActiveSpan(t *testing.T) {
 	if r.Body().AsString() != "hello" {
 		t.Errorf("body = %q, want hello", r.Body().AsString())
 	}
-	if r.Severity() != 0 && r.Severity() < 1 {
-		t.Errorf("severity not set from level: %v", r.Severity())
+	// The line was emitted with WarnContext, so assert exactly that. The
+	// previous condition was `r.Severity() != 0 && r.Severity() < 1`, which for
+	// an integer severity can never be true — it demanded a value strictly
+	// between 0 and 1 — so the level mapping had no coverage at all and this
+	// branch could not fail.
+	if r.Severity() != log.SeverityWarn {
+		t.Errorf("severity = %v, want %v (slog level not mapped)", r.Severity(), log.SeverityWarn)
 	}
 }
 
