@@ -216,6 +216,13 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
             } catch {
                 /* swallow */
             } finally {
+                // Unregister the global before dropping the install guard.
+                // `setGlobalLoggerProvider` REFUSES to replace an already
+                // registered global, so a re-init after shutdown (Lambda or
+                // worker recycle, or a second setup in tests) would silently
+                // keep pointing at this shut-down provider and drop every log
+                // record from then on — with no error anywhere.
+                logs.disable();
                 installed = null;
             }
         },
@@ -227,5 +234,9 @@ export function setupOtelSdk(options: SetupOtelOptions): OtelSdkHandle {
 
 /** Test seam — wipes the install guard so the next call re-initializes. */
 export function _resetOtelSdkForTests(): void {
+    // Same reason as `shutdown()` — without this the second test to call
+    // `setupOtelSdk` inherits the first test's provider and its assertions
+    // silently observe the wrong exporter.
+    logs.disable();
     installed = null;
 }
