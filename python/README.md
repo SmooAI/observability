@@ -37,9 +37,9 @@ from smooai_observability.types import User
 set_user(User(id="u1", org_id="o1"))
 add_breadcrumb("db", "query ran", {"rows": 12})
 
-with with_scope() as scope:        # contextvars-based, async-safe
+with with_scope() as scope:  # contextvars-based, async-safe
     scope.set_tag("request_id", "abc")
-    ...                            # captures here pick up the child scope
+    ...  # captures here pick up the child scope
 ```
 
 ### Metrics
@@ -63,11 +63,16 @@ from opentelemetry import trace
 from smooai_observability.gen_ai_attributes import GenAIAttributes, set_gen_ai_attributes
 
 with trace.get_tracer("agent").start_as_current_span("llm.call") as span:
-    set_gen_ai_attributes(span, GenAIAttributes(
-        system="anthropic", operation_name="chat",
-        request_model="claude-opus-4-8",
-        usage_input_tokens=120, usage_output_tokens=80,
-    ))
+    set_gen_ai_attributes(
+        span,
+        GenAIAttributes(
+            system="anthropic",
+            operation_name="chat",
+            request_model="claude-opus-4-8",
+            usage_input_tokens=120,
+            usage_output_tokens=80,
+        ),
+    )
 ```
 
 ### FastAPI
@@ -77,7 +82,7 @@ from fastapi import FastAPI
 from smooai_observability.integrations.fastapi import ObservabilityMiddleware
 
 app = FastAPI()
-app.add_middleware(ObservabilityMiddleware)   # after your auth middleware
+app.add_middleware(ObservabilityMiddleware)  # after your auth middleware
 ```
 
 ## Environment variables
