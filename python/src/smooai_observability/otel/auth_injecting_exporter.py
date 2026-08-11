@@ -18,6 +18,7 @@ non-retryable, so the re-mint takes effect on the following batch).
 
 from __future__ import annotations
 
+from opentelemetry.exporter.otlp.proto.http._log_exporter import OTLPLogExporter
 from opentelemetry.exporter.otlp.proto.http.metric_exporter import OTLPMetricExporter
 from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
@@ -36,6 +37,28 @@ def _inject(session_headers, token_provider: TokenProvider) -> None:
 
 class AuthInjectingTraceExporter(OTLPSpanExporter):
     """OTLP/HTTP span exporter that injects a fresh Bearer per export."""
+
+    def __init__(
+        self,
+        *,
+        endpoint: str,
+        token_provider: TokenProvider,
+        headers: dict[str, str] | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        super().__init__(endpoint=endpoint, headers=headers, timeout=timeout)
+        self._token_provider = token_provider
+
+    def _export(self, serialized_data, timeout_sec=None):  # type: ignore[override]
+        _inject(self._session.headers, self._token_provider)
+        resp = super()._export(serialized_data, timeout_sec)
+        if getattr(resp, "status_code", None) == 401:
+            self._token_provider.invalidate()
+        return resp
+
+
+class AuthInjectingLogExporter(OTLPLogExporter):
+    """OTLP/HTTP log exporter that injects a fresh Bearer per export."""
 
     def __init__(
         self,

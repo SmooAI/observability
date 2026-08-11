@@ -11,7 +11,7 @@ init errors are logged to stderr and the SDK falls back to a no-op.
 
 ## Required env vars
   SMOOAI_OBSERVABILITY_ENDPOINT   — base ingest URL (e.g. "https://api.smoo.ai").
-                                    ``/v1/traces`` + ``/v1/metrics`` are appended.
+                                    ``/v1/traces`` + ``/v1/metrics`` + ``/v1/logs`` are appended.
 
 ## Auth (pick ONE; pre-minted token wins if both present)
   SMOOAI_OBSERVABILITY_TOKEN          — pre-minted Bearer JWT (not refreshed).
@@ -44,6 +44,7 @@ class BootstrapEnv:
     endpoint: str | None = None
     traces_endpoint: str | None = None
     metrics_endpoint: str | None = None
+    logs_endpoint: str | None = None
     token: str | None = None
     auth_url: str | None = None
     client_id: str | None = None
@@ -98,6 +99,7 @@ def bootstrap_observability(
         endpoint=o.endpoint or os.environ.get("SMOOAI_OBSERVABILITY_ENDPOINT"),
         traces_endpoint=o.traces_endpoint or os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"),
         metrics_endpoint=o.metrics_endpoint or os.environ.get("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"),
+        logs_endpoint=o.logs_endpoint or os.environ.get("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"),
         token=o.token or os.environ.get("SMOOAI_OBSERVABILITY_TOKEN"),
         auth_url=o.auth_url or os.environ.get("SMOOAI_OBSERVABILITY_AUTH_URL"),
         client_id=o.client_id or os.environ.get("SMOOAI_OBSERVABILITY_CLIENT_ID"),
@@ -139,6 +141,7 @@ def bootstrap_observability(
 
         traces_endpoint = env.traces_endpoint or (f"{_strip_trailing_slash(env.endpoint)}/v1/traces" if env.endpoint else None)
         metrics_endpoint = env.metrics_endpoint or (f"{_strip_trailing_slash(env.endpoint)}/v1/metrics" if env.endpoint else None)
+        logs_endpoint = env.logs_endpoint or (f"{_strip_trailing_slash(env.endpoint)}/v1/logs" if env.endpoint else None)
 
         otel_handle = _maybe_setup_otel(
             service_name=env.service_name,
@@ -146,6 +149,7 @@ def bootstrap_observability(
             release=env.release,
             traces_endpoint=traces_endpoint,
             metrics_endpoint=metrics_endpoint,
+            logs_endpoint=logs_endpoint,
             static_headers=static_headers,
             token_provider=token_provider,
         )
@@ -192,6 +196,7 @@ def _maybe_setup_otel(**kwargs: object) -> object:
             release=kwargs.get("release"),  # type: ignore[arg-type]
             otlp_endpoint=kwargs.get("traces_endpoint"),  # type: ignore[arg-type]
             otlp_metrics_endpoint=kwargs.get("metrics_endpoint"),  # type: ignore[arg-type]
+            otlp_logs_endpoint=kwargs.get("logs_endpoint"),  # type: ignore[arg-type]
             otlp_headers=dict(kwargs.get("static_headers") or {}),  # type: ignore[arg-type]
             token_provider=kwargs.get("token_provider"),  # type: ignore[arg-type]
         )
