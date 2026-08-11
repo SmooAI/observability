@@ -86,7 +86,10 @@ func TestSetupOtelSDKNoEndpointNoProviders(t *testing.T) {
 	resetOtelSDK()
 	defer resetOtelSDK()
 	h := SetupOtelSDK(context.Background(), SetupOtelOptions{ServiceName: "svc", SkipStart: true})
-	if h.TracerProvider != nil || h.MeterProvider != nil {
+	// LoggerProvider belongs in this check too: without it the new logs signal
+	// could install a provider with no endpoint configured and nothing here
+	// would notice.
+	if h.TracerProvider != nil || h.MeterProvider != nil || h.LoggerProvider != nil {
 		t.Error("no endpoints should yield nil providers")
 	}
 }

@@ -12,7 +12,9 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	logglobal "go.opentelemetry.io/otel/log/global"
 	"go.opentelemetry.io/otel/propagation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -46,6 +48,9 @@ type SetupOtelOptions struct {
 	TracesEndpoint string
 	// MetricsEndpoint is the full OTLP/HTTP metrics URL. Falls back to env.
 	MetricsEndpoint string
+	// LogsEndpoint is the full OTLP/HTTP logs URL (e.g.
+	// https://api.smoo.ai/v1/logs). Falls back to env vars when empty.
+	LogsEndpoint string
 	// Headers are static headers merged onto every export request.
 	Headers map[string]string
 	// TokenProvider, when set, injects a fresh Bearer per export request.
@@ -63,6 +68,7 @@ type SetupOtelOptions struct {
 type OtelSDKHandle struct {
 	TracerProvider *sdktrace.TracerProvider
 	MeterProvider  *metric.MeterProvider
+	LoggerProvider *sdklog.LoggerProvider
 }
 
 // Flush force-flushes spans and metrics, bounded by timeoutMs. Best-effort.
@@ -79,6 +85,9 @@ func (h *OtelSDKHandle) Flush(ctx context.Context, timeout time.Duration) {
 	if h.MeterProvider != nil {
 		_ = h.MeterProvider.ForceFlush(fctx)
 	}
+	if h.LoggerProvider != nil {
+		_ = h.LoggerProvider.ForceFlush(fctx)
+	}
 }
 
 // Shutdown drains and closes the pipelines. Idempotent.
@@ -89,6 +98,9 @@ func (h *OtelSDKHandle) Shutdown(ctx context.Context) {
 	}
 	if h.MeterProvider != nil {
 		_ = h.MeterProvider.Shutdown(ctx)
+	}
+	if h.LoggerProvider != nil {
+		_ = h.LoggerProvider.Shutdown(ctx)
 	}
 	otelInstallMu.Lock()
 	otelInstalled = nil
@@ -123,6 +135,9 @@ func SetupOtelSDK(ctx context.Context, opts SetupOtelOptions) *OtelSDKHandle {
 		os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 	metricEndpoint := firstNonEmpty(opts.MetricsEndpoint,
 		os.Getenv("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"),
+		os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	logEndpoint := firstNonEmpty(opts.LogsEndpoint,
+		os.Getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"),
 		os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
 
 	res := buildResource(opts)
@@ -168,12 +183,20 @@ func SetupOtelSDK(ctx context.Context, opts SetupOtelOptions) *OtelSDKHandle {
 		}
 	}
 
+	// --- Logs ---
+	if lp := buildLoggerProvider(ctx, opts, logEndpoint, res); lp != nil {
+		handle.LoggerProvider = lp
+	}
+
 	if !opts.SkipStart {
 		if handle.TracerProvider != nil {
 			otel.SetTracerProvider(handle.TracerProvider)
 		}
 		if handle.MeterProvider != nil {
 			otel.SetMeterProvider(handle.MeterProvider)
+		}
+		if handle.LoggerProvider != nil {
+			logglobal.SetLoggerProvider(handle.LoggerProvider)
 		}
 		otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
 			propagation.TraceContext{}, propagation.Baggage{}))
