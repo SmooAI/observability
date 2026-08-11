@@ -18,6 +18,9 @@ public sealed class BootstrapEnv
     /// <summary>Explicit metrics endpoint override.</summary>
     public string? MetricsEndpoint { get; set; }
 
+    /// <summary>Explicit logs endpoint override.</summary>
+    public string? LogsEndpoint { get; set; }
+
     /// <summary>Pre-minted Bearer JWT (wins over client-credentials when both set).</summary>
     public string? Token { get; set; }
 
@@ -97,25 +100,11 @@ public static class Bootstrap
 
         try
         {
-            TokenProvider? tokenProvider = null;
-            Dictionary<string, string>? staticHeaders = null;
+            var (tokenProvider, staticHeaders) = ResolveAuth(env, warn: true);
 
-            if (!string.IsNullOrEmpty(env.Token))
+            // Warm-up mint so the first export doesn't pay the round trip.
+            if (tokenProvider is not null)
             {
-                staticHeaders = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["authorization"] = $"Bearer {env.Token}",
-                };
-            }
-            else if (!string.IsNullOrEmpty(env.AuthUrl) && !string.IsNullOrEmpty(env.ClientId) && !string.IsNullOrEmpty(env.ClientSecret))
-            {
-                tokenProvider = new TokenProvider(new TokenProviderOptions
-                {
-                    AuthUrl = env.AuthUrl!,
-                    ClientId = env.ClientId!,
-                    ClientSecret = env.ClientSecret!,
-                });
-                // Warm-up mint so the first export doesn't pay the round trip.
                 try
                 {
                     await tokenProvider.GetAccessTokenAsync().ConfigureAwait(false);
@@ -124,10 +113,6 @@ public static class Bootstrap
                 {
                     Warn($"initial token mint failed; OTLP exports will retry on first export: {ex.Message}");
                 }
-            }
-            else
-            {
-                Warn("no auth configured (set SMOOAI_OBSERVABILITY_TOKEN or _AUTH_URL/_CLIENT_ID/_CLIENT_SECRET); OTLP exports will be unauthenticated");
             }
 
             var tracesEndpoint = env.TracesEndpoint ?? (env.Endpoint is not null ? $"{StripSlash(env.Endpoint)}/v1/traces" : null);
@@ -163,7 +148,40 @@ public static class Bootstrap
         }
     }
 
-    private static BootstrapEnv ResolveEnv(BootstrapEnv? overrides)
+    /// <summary>
+    /// Resolve auth from env: a pre-minted Bearer becomes a static header; M2M
+    /// client-credentials become a lazy-minting <see cref="TokenProvider"/> (no
+    /// warm-up here — the caller decides whether to pre-mint). Shared by
+    /// <see cref="Run"/> and the logging extension so all signals authenticate identically.
+    /// </summary>
+    internal static (TokenProvider? TokenProvider, Dictionary<string, string>? StaticHeaders) ResolveAuth(BootstrapEnv env, bool warn)
+    {
+        if (!string.IsNullOrEmpty(env.Token))
+        {
+            return (null, new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["authorization"] = $"Bearer {env.Token}",
+            });
+        }
+
+        if (!string.IsNullOrEmpty(env.AuthUrl) && !string.IsNullOrEmpty(env.ClientId) && !string.IsNullOrEmpty(env.ClientSecret))
+        {
+            return (new TokenProvider(new TokenProviderOptions
+            {
+                AuthUrl = env.AuthUrl!,
+                ClientId = env.ClientId!,
+                ClientSecret = env.ClientSecret!,
+            }), null);
+        }
+
+        if (warn)
+        {
+            Warn("no auth configured (set SMOOAI_OBSERVABILITY_TOKEN or _AUTH_URL/_CLIENT_ID/_CLIENT_SECRET); OTLP exports will be unauthenticated");
+        }
+        return (null, null);
+    }
+
+    internal static BootstrapEnv ResolveEnv(BootstrapEnv? overrides)
     {
         string? Env(string key) => System.Environment.GetEnvironmentVariable(key);
         return new BootstrapEnv
@@ -171,6 +189,7 @@ public static class Bootstrap
             Endpoint = overrides?.Endpoint ?? Env("SMOOAI_OBSERVABILITY_ENDPOINT"),
             TracesEndpoint = overrides?.TracesEndpoint ?? Env("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"),
             MetricsEndpoint = overrides?.MetricsEndpoint ?? Env("OTEL_EXPORTER_OTLP_METRICS_ENDPOINT"),
+            LogsEndpoint = overrides?.LogsEndpoint ?? Env("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT"),
             Token = overrides?.Token ?? Env("SMOOAI_OBSERVABILITY_TOKEN"),
             AuthUrl = overrides?.AuthUrl ?? Env("SMOOAI_OBSERVABILITY_AUTH_URL"),
             ClientId = overrides?.ClientId ?? Env("SMOOAI_OBSERVABILITY_CLIENT_ID"),
