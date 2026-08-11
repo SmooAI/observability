@@ -1,9 +1,9 @@
 'use client';
 
-import { Client } from '../client';
-import { ErrorBoundary } from '../react';
 import type { ReactNode } from 'react';
 import { useEffect } from 'react';
+import { Client } from '../client';
+import { ErrorBoundary } from '../react';
 
 interface RootErrorBoundaryProps {
     /** Error from Next.js global-error / error.tsx. */

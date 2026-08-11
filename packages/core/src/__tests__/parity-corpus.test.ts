@@ -10,8 +10,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { fnv1a32, normalizeLevel, sampleDecision, shouldEmitLog, type CanonicalLevel } from '../sampling';
-import { formatTraceparent, parseTraceparent } from '../traceparent';
 import { resolveTelemetrySettings } from '../telemetry-settings';
+import { formatTraceparent, parseTraceparent } from '../traceparent';
 
 const CORPUS_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../../../parity/sampling-corpus.json');
 

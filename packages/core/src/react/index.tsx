@@ -1,5 +1,5 @@
-import { Client } from '../client';
 import { Component, type ErrorInfo, type ReactNode, useCallback } from 'react';
+import { Client } from '../client';
 
 interface ErrorBoundaryProps {
     fallback: ReactNode | ((args: { error: Error; resetError: () => void }) => ReactNode);

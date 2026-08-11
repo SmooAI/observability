@@ -30,12 +30,12 @@
  * SMOODEV-1206.
  */
 
-import smooFetch, { HTTPResponseError } from '@smooai/fetch';
 import { ExportResult, ExportResultCode } from '@opentelemetry/core';
 import { JsonLogsSerializer, JsonMetricsSerializer, JsonTraceSerializer } from '@opentelemetry/otlp-transformer';
+import type { LogRecordExporter, ReadableLogRecord } from '@opentelemetry/sdk-logs';
 import type { ResourceMetrics, PushMetricExporter } from '@opentelemetry/sdk-metrics';
 import type { ReadableSpan, SpanExporter } from '@opentelemetry/sdk-trace-base';
-import type { LogRecordExporter, ReadableLogRecord } from '@opentelemetry/sdk-logs';
+import smooFetch, { HTTPResponseError } from '@smooai/fetch';
 import type { TokenProvider } from '../auth/token-provider';
 
 /**
