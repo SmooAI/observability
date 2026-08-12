@@ -187,6 +187,18 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
         ..Default::default()
     });
 
+    // Errors reach the TRACE, not just the HTTP transport. Opt-out rather than
+    // opt-in because the opt-in version was already here and nothing used it:
+    // `set_global_client` has always wired `capture_exception`, and as of
+    // 2026-08-12 exactly one place in the SmooAI monorepo's rust/ tree even
+    // mentioned it — in a comment. Every error group in production came from
+    // Node or Lambda services that have since been rewritten in Rust.
+    let client = crate::otel_capture::register_otel_capture(&client);
+
+    // A panicking service is the loudest failure a process has and reported
+    // nothing at all before this.
+    crate::otel_capture::install_panic_hook();
+
     BootstrapResult {
         installed: true,
         otel,
