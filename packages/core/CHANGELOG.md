@@ -1,5 +1,15 @@
 # @smooai/observability
 
+## 0.14.0
+
+### Minor Changes
+
+- eb02e38: Rust: errors now reach the trace. `bootstrap()` registers an OTel-native capture
+  handler and a panic hook, so `capture_exception` / `capture_message` record on
+  the active span (or a synthetic one) as a semconv `exception` event with an Error
+  status — matching the Go SDK's `otel_capture.go`, which Rust had no equivalent
+  of. A panicking service previously reported nothing anywhere.
+
 ## 0.13.0
 
 ### Minor Changes
@@ -18,12 +28,12 @@
 ### Minor Changes
 
 - a071796: SMOODEV-2698 (ADR-097 W1+W2): session-scoped browser log sampling, config-served telemetry settings, and the cross-language parity corpus.
-    - `sampleDecision(id, ratio)` — deterministic FNV-1a 32-bit over the UTF-8 bytes of the session/trace id, so the decision is stable for a page's lifetime and reproducible byte-identically in the Rust/Python/Go/.NET SDKs. Ratio 0.0/1.0 are exact.
-    - `shouldEmitLog(...)` — one decision point: kill switch → minimum level → warnings/errors always 100% → trace decision inherited where a trace exists → otherwise the session decision. Sampling is per session, never per line, so any trace you can open has 100% of its log lines.
-    - `loadTelemetrySettings(provider)` / `resolveTelemetrySettings(raw)` — `@smooai/config` public-tier telemetry settings read through an injectable provider seam (the SDK never imports a config client, so it stays usable with no network). Unreachable, malformed, or out-of-range values fall back to the compiled-in ADR-010 defaults, never to "sample everything out".
-    - `parseTraceparent` / `formatTraceparent` — the first real W3C trace-context implementation in this SDK; strict, rejects all-zero ids.
-    - `normalizeLevel` — canonical UPPERCASE levels, because ADR-096's error-rate query is case-sensitive.
-    - `parity/sampling-corpus.json` — 170 committed golden vectors every language SDK asserts against in its own CI lane.
+  - `sampleDecision(id, ratio)` — deterministic FNV-1a 32-bit over the UTF-8 bytes of the session/trace id, so the decision is stable for a page's lifetime and reproducible byte-identically in the Rust/Python/Go/.NET SDKs. Ratio 0.0/1.0 are exact.
+  - `shouldEmitLog(...)` — one decision point: kill switch → minimum level → warnings/errors always 100% → trace decision inherited where a trace exists → otherwise the session decision. Sampling is per session, never per line, so any trace you can open has 100% of its log lines.
+  - `loadTelemetrySettings(provider)` / `resolveTelemetrySettings(raw)` — `@smooai/config` public-tier telemetry settings read through an injectable provider seam (the SDK never imports a config client, so it stays usable with no network). Unreachable, malformed, or out-of-range values fall back to the compiled-in ADR-010 defaults, never to "sample everything out".
+  - `parseTraceparent` / `formatTraceparent` — the first real W3C trace-context implementation in this SDK; strict, rejects all-zero ids.
+  - `normalizeLevel` — canonical UPPERCASE levels, because ADR-096's error-rate query is case-sensitive.
+  - `parity/sampling-corpus.json` — 170 committed golden vectors every language SDK asserts against in its own CI lane.
 
 ## 0.11.0
 
@@ -31,23 +41,23 @@
 
 - 82bb589: SMOODEV-1206: per-request TokenProvider auth — matches `@smooai/config` pattern, fixes silent OTLP 401s after token expiry.
 
-    The previous bootstrap minted a Bearer once at SDK init and stuck it in a
-    headers map. The OTel JS v0.55 OTLP HTTP exporter `Object.assign`s that
-    map at construction time, so the original snapshot lived forever — every
-    export 401'd after the first token expired (~1h). Voice ECS containers
-    running for hours past expiry lost every span; warm Lambdas inherited
-    stale snapshots.
+  The previous bootstrap minted a Bearer once at SDK init and stuck it in a
+  headers map. The OTel JS v0.55 OTLP HTTP exporter `Object.assign`s that
+  map at construction time, so the original snapshot lived forever — every
+  export 401'd after the first token expired (~1h). Voice ECS containers
+  running for hours past expiry lost every span; warm Lambdas inherited
+  stale snapshots.
 
-    Fix: new `TokenProvider` (direct port of `@smooai/config`'s) that caches
-    a token in memory, refreshes 60s before expiry, dedupes concurrent
-    calls, and exposes `invalidate()` for 401 retry. New custom
-    `AuthInjectingTraceExporter` + `AuthInjectingMetricExporter` ask the
-    TokenProvider for a fresh Bearer on EVERY export — no snapshot.
+  Fix: new `TokenProvider` (direct port of `@smooai/config`'s) that caches
+  a token in memory, refreshes 60s before expiry, dedupes concurrent
+  calls, and exposes `invalidate()` for 401 retry. New custom
+  `AuthInjectingTraceExporter` + `AuthInjectingMetricExporter` ask the
+  TokenProvider for a fresh Bearer on EVERY export — no snapshot.
 
-    `setupOtelSdk` now accepts a `tokenProvider` option; when set it routes
-    traces + metrics through the new exporters. The static-token path
-    (`SMOOAI_OBSERVABILITY_TOKEN`) and `otlpHeaders` snapshot path are
-    preserved for callers that want to handle auth themselves.
+  `setupOtelSdk` now accepts a `tokenProvider` option; when set it routes
+  traces + metrics through the new exporters. The static-token path
+  (`SMOOAI_OBSERVABILITY_TOKEN`) and `otlpHeaders` snapshot path are
+  preserved for callers that want to handle auth themselves.
 
 ## 0.10.1
 
@@ -60,8 +70,8 @@
 ### Minor Changes
 
 - 59234b2: SMOODEV-1155 + SMOODEV-1156–1159: scaffold multi-language SDK subdirs and add OTel GenAI semantic-conventions helpers.
-    - New scaffolds under `dotnet/`, `go/`, `python/`, `rust/` mirroring the layout of `~/dev/smooai/logger/`. Each is a placeholder package manifest + README pointing at the canonical TS reference and its tracking ticket.
-    - New `setGenAIAttributes(span, attrs)` + `recordGenAIMessage(span, role, content)` helpers for emitting the OTel `gen_ai.*` attribute family on LLM and agent spans. Backs the upcoming LLM Observability dashboard (SMOODEV-1160).
+  - New scaffolds under `dotnet/`, `go/`, `python/`, `rust/` mirroring the layout of `~/dev/smooai/logger/`. Each is a placeholder package manifest + README pointing at the canonical TS reference and its tracking ticket.
+  - New `setGenAIAttributes(span, attrs)` + `recordGenAIMessage(span, role, content)` helpers for emitting the OTel `gen_ai.*` attribute family on LLM and agent spans. Backs the upcoming LLM Observability dashboard (SMOODEV-1160).
 
 ## 0.9.0
 
@@ -69,9 +79,9 @@
 
 - 7454d83: SMOODEV-1148: Node Client.captureException now fires BOTH OTel capture AND HTTP webhook transport.
 
-    Previously the runtime-native captureHandler (OTel span events) short-circuited the HTTP transport, so Node errors never reached the webhook-backed Errors dashboard. Now both paths fire: OTel keeps emitting span events for tracing/observability, and the webhook also gets the event for the Errors UI.
+  Previously the runtime-native captureHandler (OTel span events) short-circuited the HTTP transport, so Node errors never reached the webhook-backed Errors dashboard. Now both paths fire: OTel keeps emitting span events for tracing/observability, and the webhook also gets the event for the Errors UI.
 
-    Node init now registers an HTTP transport (`makeNodeTransport`) when a `dsn` is configured. No-op when DSN is empty.
+  Node init now registers an HTTP transport (`makeNodeTransport`) when a `dsn` is configured. No-op when DSN is empty.
 
 ## 0.8.0
 
@@ -79,9 +89,9 @@
 
 - a956c06: SMOODEV-1128: Bootstrap awaits the initial token mint before constructing the OTel SDK.
 
-    The OTel `@opentelemetry/exporter-trace-otlp-http@0.55+` exporter snapshots its `headers` config at construction via `Object.assign` (mergeHeaders in otlp-http-configuration). The previous fire-and-forget mint left the exporter holding an empty header object permanently — every export went out without `Authorization` and 401'd at any Bearer-auth-gated ingest endpoint.
+  The OTel `@opentelemetry/exporter-trace-otlp-http@0.55+` exporter snapshots its `headers` config at construction via `Object.assign` (mergeHeaders in otlp-http-configuration). The previous fire-and-forget mint left the exporter holding an empty header object permanently — every export went out without `Authorization` and 401'd at any Bearer-auth-gated ingest endpoint.
 
-    **Breaking change**: `bootstrapObservability()` now returns `Promise<BootstrapResult>` instead of `BootstrapResult`. The side-effect import (`import '@smooai/observability/bootstrap'`) is unchanged for callers — top-level `await` handles the initial mint before any importing module sees the SDK.
+  **Breaking change**: `bootstrapObservability()` now returns `Promise<BootstrapResult>` instead of `BootstrapResult`. The side-effect import (`import '@smooai/observability/bootstrap'`) is unchanged for callers — top-level `await` handles the initial mint before any importing module sees the SDK.
 
 ## 0.7.0
 
@@ -89,19 +99,20 @@
 
 - 3b91840: Add `@smooai/observability/bootstrap` subpath — a single side-effect import that customers (and Smoo internal services) use to instrument any Node compute (Lambda, ECS, Next.js Node runtime) without writing SDK glue.
 
-    ```ts
-    // At the top of the entry file
-    import '@smooai/observability/bootstrap';
-    ```
+  ```ts
+  // At the top of the entry file
+  import "@smooai/observability/bootstrap";
+  ```
 
-    Then set env vars:
-    - `SMOOAI_OBSERVABILITY_ENDPOINT` — base URL of the ingest API (e.g. `https://api.smoo.ai`). SDK appends `/v1/traces` and `/v1/metrics`. Per-signal `OTEL_EXPORTER_OTLP_*_ENDPOINT` env vars are honored if set.
-    - Auth — pick ONE:
-        - `SMOOAI_OBSERVABILITY_TOKEN` — pre-minted Bearer JWT. Easiest for local dev. Not refreshed.
-        - `SMOOAI_OBSERVABILITY_AUTH_URL` + `SMOOAI_OBSERVABILITY_CLIENT_ID` + `SMOOAI_OBSERVABILITY_CLIENT_SECRET` — standard `client_credentials` flow. SDK posts to `${AUTH_URL}/token`, caches the JWT, re-mints every ~55min (under the openauth 1h TTL). The OTLP exporter reads the auth header by reference so refreshes propagate to the next export with no exporter restart.
-    - Optional: `SMOOAI_OBSERVABILITY_SERVICE_NAME`, `_ENVIRONMENT`, `_RELEASE`, `_DISABLED`.
+  Then set env vars:
 
-    Idempotent and crash-safe — calling `bootstrapObservability()` twice returns the same handle; missing config / mint failures / OTel init errors are logged to stderr without throwing.
+  - `SMOOAI_OBSERVABILITY_ENDPOINT` — base URL of the ingest API (e.g. `https://api.smoo.ai`). SDK appends `/v1/traces` and `/v1/metrics`. Per-signal `OTEL_EXPORTER_OTLP_*_ENDPOINT` env vars are honored if set.
+  - Auth — pick ONE:
+    - `SMOOAI_OBSERVABILITY_TOKEN` — pre-minted Bearer JWT. Easiest for local dev. Not refreshed.
+    - `SMOOAI_OBSERVABILITY_AUTH_URL` + `SMOOAI_OBSERVABILITY_CLIENT_ID` + `SMOOAI_OBSERVABILITY_CLIENT_SECRET` — standard `client_credentials` flow. SDK posts to `${AUTH_URL}/token`, caches the JWT, re-mints every ~55min (under the openauth 1h TTL). The OTLP exporter reads the auth header by reference so refreshes propagate to the next export with no exporter restart.
+  - Optional: `SMOOAI_OBSERVABILITY_SERVICE_NAME`, `_ENVIRONMENT`, `_RELEASE`, `_DISABLED`.
+
+  Idempotent and crash-safe — calling `bootstrapObservability()` twice returns the same handle; missing config / mint failures / OTel init errors are logged to stderr without throwing.
 
 ### Patch Changes
 
@@ -113,19 +124,21 @@
 
 - 365b90c: OTel-first node Client (SMOODEV-1067d).
 
-    The Node Client no longer wraps a Smoo-native HTTP transport — it emits to OpenTelemetry natively. Every `captureException` / `captureMessage` becomes a span event on the active OTel span (or a synthetic one if none is active), with `SpanStatusCode.ERROR` for exceptions and OTLP-shaped attributes (`enduser.id`, `enduser.org_id`, `service.version`, `deployment.environment.name`, `smoo.tag.*`, `smoo.event_id`, `smoo.level`). The OTel SDK handles batching, retry, and wire format; the Smoo SDK does not run a parallel HTTP pipeline on Node.
+  The Node Client no longer wraps a Smoo-native HTTP transport — it emits to OpenTelemetry natively. Every `captureException` / `captureMessage` becomes a span event on the active OTel span (or a synthetic one if none is active), with `SpanStatusCode.ERROR` for exceptions and OTLP-shaped attributes (`enduser.id`, `enduser.org_id`, `service.version`, `deployment.environment.name`, `smoo.tag.*`, `smoo.event_id`, `smoo.level`). The OTel SDK handles batching, retry, and wire format; the Smoo SDK does not run a parallel HTTP pipeline on Node.
 
-    `@smooai/logger` is now optional. The Smoo SDK has no compile-time dependency on it. When present, its CONTEXT global feeds OTel baggage (see `@smooai/observability-otel`). When absent, the OTel ambient context (W3C trace context propagation, baggage) is the single source of correlation truth — winston / pino / bunyan / console users get the same trace-id flowing through logs, traces, and Smoo error groups by reading `readOtelCorrelation()`.
+  `@smooai/logger` is now optional. The Smoo SDK has no compile-time dependency on it. When present, its CONTEXT global feeds OTel baggage (see `@smooai/observability-otel`). When absent, the OTel ambient context (W3C trace context propagation, baggage) is the single source of correlation truth — winston / pino / bunyan / console users get the same trace-id flowing through logs, traces, and Smoo error groups by reading `readOtelCorrelation()`.
 
-    Breaking changes (`@smooai/observability` 0.3 → 0.4):
-    - `makeNodeTransport` (re-exported from the `node` entry) removed — no longer needed; OTel SDK is the transport.
-    - `Client._registerTransport` is now a no-op on Node when a capture handler is registered (which happens by default in `Client.init`). Browser is unchanged.
-    - New seam `Client._registerCaptureHandler(handler | null)` for advanced consumers who want to plug in their own non-OTel capture path.
+  Breaking changes (`@smooai/observability` 0.3 → 0.4):
 
-    Breaking changes (`@smooai/observability-otel` 0.1 → 0.2):
-    - `bridgeClientToOtel()` removed. There's nothing to bridge — the Smoo Client already emits to OTel natively on Node. `setupOtelSdk()` and `readOtelCorrelation()` remain.
+  - `makeNodeTransport` (re-exported from the `node` entry) removed — no longer needed; OTel SDK is the transport.
+  - `Client._registerTransport` is now a no-op on Node when a capture handler is registered (which happens by default in `Client.init`). Browser is unchanged.
+  - New seam `Client._registerCaptureHandler(handler | null)` for advanced consumers who want to plug in their own non-OTel capture path.
 
-    Tests: 33 green on core (was 24), 5 on otel package. Typecheck + build clean.
+  Breaking changes (`@smooai/observability-otel` 0.1 → 0.2):
+
+  - `bridgeClientToOtel()` removed. There's nothing to bridge — the Smoo Client already emits to OTel natively on Node. `setupOtelSdk()` and `readOtelCorrelation()` remain.
+
+  Tests: 33 green on core (was 24), 5 on otel package. Typecheck + build clean.
 
 ## 0.3.0
 
@@ -133,30 +146,32 @@
 
 - bd64532: Node SDK capture handlers + Hono middleware (SMOODEV-1067 follow-up th-bafeb7).
 
-    `@smooai/observability/node` now ships real implementations:
-    - `registerNodeGlobalHandlers({ flush, exitOnUncaught })` — attaches `uncaughtException` + `unhandledRejection` listeners that forward to `Client.captureException`, plus optional SIGTERM / SIGINT / `beforeExit` flushing so a Lambda container shutdown drains the in-memory queue. Idempotent.
-    - `makeNodeTransport(options)` — Node-flavored `Transport` adapter (fetch + keepalive, no Beacon). Returns the underlying transport so callers (and the auto-init wiring) can hook the flush method into the lifecycle.
-    - `observabilityMiddleware({ resolveUser, requestHeaderAllowlist })` — Hono-shaped middleware. Per request: hydrates the active `Scope` with the authenticated user (defaults to reading `c.get('auth')` produced by `@smooai/auth`), adds a `request` context with method/path and an allow-listed header subset, wraps the handler chain in `withScope` so any `captureException` fired from a downstream handler picks up that request's identity, and captures thrown errors before re-throwing so Hono's onError still gets to render the response.
-    - `Client.init` on node now auto-wires the transport and global handlers (override with `autoInstrumentation: false`).
+  `@smooai/observability/node` now ships real implementations:
 
-    Also fixed a latent bug in `withScope`: previously the scope was popped before any `await` inside the callback resolved, so request-scoped state was gone by the time async handlers ran. `withScope` now defers the pop until a returned thenable settles, while keeping the synchronous fast path unchanged.
+  - `registerNodeGlobalHandlers({ flush, exitOnUncaught })` — attaches `uncaughtException` + `unhandledRejection` listeners that forward to `Client.captureException`, plus optional SIGTERM / SIGINT / `beforeExit` flushing so a Lambda container shutdown drains the in-memory queue. Idempotent.
+  - `makeNodeTransport(options)` — Node-flavored `Transport` adapter (fetch + keepalive, no Beacon). Returns the underlying transport so callers (and the auto-init wiring) can hook the flush method into the lifecycle.
+  - `observabilityMiddleware({ resolveUser, requestHeaderAllowlist })` — Hono-shaped middleware. Per request: hydrates the active `Scope` with the authenticated user (defaults to reading `c.get('auth')` produced by `@smooai/auth`), adds a `request` context with method/path and an allow-listed header subset, wraps the handler chain in `withScope` so any `captureException` fired from a downstream handler picks up that request's identity, and captures thrown errors before re-throwing so Hono's onError still gets to render the response.
+  - `Client.init` on node now auto-wires the transport and global handlers (override with `autoInstrumentation: false`).
 
-    24 tests total (was 13). Build + typecheck clean.
+  Also fixed a latent bug in `withScope`: previously the scope was popped before any `await` inside the callback resolved, so request-scoped state was gone by the time async handlers ran. `withScope` now defers the pop until a returned thenable settles, while keeping the synchronous fast path unchanged.
+
+  24 tests total (was 13). Build + typecheck clean.
 
 ### Patch Changes
 
 - 2d2eed7: `@smooai/observability-otel` — OpenTelemetry foundation (SMOODEV-1067c Phase 1).
 
-    New package wraps `@opentelemetry/sdk-node` + `@opentelemetry/auto-instrumentations-node` + the OTLP/HTTP trace exporter, and bridges the core `Client` so every `captureException` records on the active OTel span with `SpanStatusCode.ERROR`. Works without `@smooai/logger` — pipes correlation IDs through `@opentelemetry/api`'s ambient context, so any logger / framework that integrates with OTel sees the same trace-id flowing through logs, traces, and Smoo error groups.
+  New package wraps `@opentelemetry/sdk-node` + `@opentelemetry/auto-instrumentations-node` + the OTLP/HTTP trace exporter, and bridges the core `Client` so every `captureException` records on the active OTel span with `SpanStatusCode.ERROR`. Works without `@smooai/logger` — pipes correlation IDs through `@opentelemetry/api`'s ambient context, so any logger / framework that integrates with OTel sees the same trace-id flowing through logs, traces, and Smoo error groups.
 
-    Public surface:
-    - `setupOtelSdk({ serviceName, otlpEndpoint, otlpHeaders, environment, release, instrumentationConfig })` — idempotent Lambda / Node bootstrap. Returns `{ sdk, flush, shutdown }`.
-    - `bridgeClientToOtel()` — wraps `Client.captureException` / `setUser` / `setTag` to also update OTel span attributes + status. Idempotent.
-    - `readOtelCorrelation()` — read-only view of the active span's `traceId` / `spanId` / sampled flag.
+  Public surface:
 
-    Also patches `@smooai/observability` core docs reference; no API change.
+  - `setupOtelSdk({ serviceName, otlpEndpoint, otlpHeaders, environment, release, instrumentationConfig })` — idempotent Lambda / Node bootstrap. Returns `{ sdk, flush, shutdown }`.
+  - `bridgeClientToOtel()` — wraps `Client.captureException` / `setUser` / `setTag` to also update OTel span attributes + status. Idempotent.
+  - `readOtelCorrelation()` — read-only view of the active span's `traceId` / `spanId` / sampled flag.
 
-    12 tests (bridge + setup), typecheck + build clean.
+  Also patches `@smooai/observability` core docs reference; no API change.
+
+  12 tests (bridge + setup), typecheck + build clean.
 
 ## 0.2.0
 
