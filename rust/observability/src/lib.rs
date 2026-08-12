@@ -37,6 +37,7 @@ pub mod client;
 pub mod gen_ai;
 pub mod metrics;
 pub mod otel;
+pub mod otel_capture;
 pub mod pii;
 pub mod scope;
 mod stack;
@@ -67,6 +68,7 @@ pub use gen_ai::{
 };
 pub use metrics::{metrics_client, metrics_client_default, MetricsClient};
 pub use otel::{setup_otel_sdk, OtelSdkHandle, SetupOtelOptions};
+pub use otel_capture::{install_panic_hook, register_otel_capture};
 pub use scope::{current_scope, global_scope, with_scope, with_scope_sync, Scope};
 pub use types::{
     Breadcrumb, ExceptionInfo, IngestPayload, IngestType, Level, ObservabilityEvent, RequestInfo,
