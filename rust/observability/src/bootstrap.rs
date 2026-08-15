@@ -83,7 +83,18 @@ impl BootstrapEnv {
 #[derive(Clone)]
 pub struct BootstrapResult {
     /// Whether the bootstrap actually ran (false = disabled or already-installed-elsewhere).
+    ///
+    /// NOTE: `installed: true` only means bootstrap was not disabled. It does
+    /// NOT mean anything is being exported — check [`Self::exporting`] for
+    /// that. These were the same flag until 2026-08-15, and the conflation hid
+    /// a production service emitting nothing for months: it had no endpoint
+    /// configured, so the OTel SDK was never installed, yet bootstrap reported
+    /// success and the pod's own "self-emit enabled" log line printed anyway.
     pub installed: bool,
+    /// Whether an OTLP exporter was actually installed — i.e. whether spans,
+    /// metrics and logs have somewhere to go. False when no endpoint is
+    /// configured, in which case this SDK is a no-op for telemetry.
+    pub exporting: bool,
     /// OTel handle — flush/shutdown. `None` if no endpoint was configured.
     pub otel: Option<OtelSdkHandle>,
     /// The capture client. Always present; capture-handler-only if no DSN.
@@ -128,6 +139,7 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
     if env.disabled {
         return BootstrapResult {
             installed: false,
+            exporting: false,
             otel: None,
             client: Client::init(ClientOptions::default()),
         };
@@ -190,6 +202,17 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
         opts.token_provider = token_provider;
         Some(setup_otel_sdk(opts))
     } else {
+        // The single most expensive silence this SDK can produce. With no
+        // endpoint, nothing is exported — but every other signal (the bootstrap
+        // return, the caller's own "observability enabled" log) still says
+        // healthy. Say it plainly instead, and name the variable to set.
+        warn(concat!(
+            "NO OTLP ENDPOINT CONFIGURED — telemetry is NOT being exported. ",
+            "Nothing this process emits will reach a collector. ",
+            "Set SMOOAI_OBSERVABILITY_ENDPOINT (or a per-signal ",
+            "OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT), or set ",
+            "SMOOAI_OBSERVABILITY_DISABLED=true to make this silence deliberate."
+        ));
         None
     };
 
@@ -214,8 +237,34 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
 
     BootstrapResult {
         installed: true,
+        exporting: otel.is_some(),
         otel,
         client,
+    }
+}
+
+
+#[cfg(test)]
+mod exporting_status_tests {
+    use super::*;
+
+    /// The inverse of the no-endpoint case: with an endpoint configured, the
+    /// result must claim it IS exporting. Without both halves asserted, a
+    /// regression that hard-codes either value passes.
+    #[tokio::test]
+    async fn an_endpoint_reports_exporting_true() {
+        let env = BootstrapEnv {
+            endpoint: Some("https://collector.example.com".to_string()),
+            service_name: Some("test-service".to_string()),
+            ..Default::default()
+        };
+        let result = build(env).await;
+        assert!(result.installed);
+        assert!(
+            result.exporting,
+            "an endpoint was configured, so exporting must be true"
+        );
+        assert!(result.otel.is_some());
     }
 }
 
@@ -279,7 +328,14 @@ mod tests {
             ..Default::default()
         };
         let result = build(env).await;
-        assert!(result.installed);
+        assert!(result.installed, "bootstrap ran");
+        // …but it is NOT exporting, and the result now says so. This assertion
+        // is the whole point: `installed` alone used to be the only signal, and
+        // it reads as "everything is fine" while nothing leaves the process.
+        assert!(
+            !result.exporting,
+            "no endpoint configured must report exporting = false"
+        );
         assert!(result.otel.is_none());
         // capture client still usable
         result
