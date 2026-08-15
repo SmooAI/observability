@@ -143,6 +143,9 @@ func Bootstrap(ctx context.Context, overrides *BootstrapEnv) BootstrapResult {
 	// SMOODEV-1148: when a DSN is set, also fan out to the webhook transport.
 	if env.DSN != "" {
 		t := newTransportFromClientOptions(*Default.Options())
+		// The crash path needs the handle so it can flush before the process
+		// dies (see crash.go); the Client only ever sees the enqueue closure.
+		registerCrashTransport(t)
 		Default.RegisterTransport(func(batch []ObservabilityEvent) {
 			for _, e := range batch {
 				t.Enqueue(e)
@@ -197,4 +200,5 @@ func resetBootstrap() {
 	bootstrapMu.Lock()
 	defer bootstrapMu.Unlock()
 	bootstrapResult = nil
+	registerCrashTransport(nil)
 }

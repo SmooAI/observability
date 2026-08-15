@@ -32,6 +32,30 @@ catch (Exception ex)
 }
 ```
 
+### Unhandled crashes
+
+`Bootstrap.Run()` also subscribes process-level crash reporting, so a process that
+dies from an unhandled exception — or silently drops a faulted `Task` nobody
+awaited — reports instead of vanishing:
+
+```csharp
+// Wired automatically by Bootstrap.Run(). Call directly only if you build the
+// OTel handle yourself. Idempotent.
+GlobalHandlers.Register(otelHandle, flushTimeoutMs: 2000);
+```
+
+- Hooks `AppDomain.CurrentDomain.UnhandledException` and
+  `TaskScheduler.UnobservedTaskException`. Both are multicast events, so handlers
+  the host already attached still run and the runtime's own crash output is
+  untouched.
+- The crash becomes an ERROR-level event on the webhook transport **and** a
+  semconv `exception` event on the current `Activity` (or a synthetic one) with
+  the span status set to `Error`.
+- `UnhandledException` cannot *prevent* termination on .NET Core — it is a
+  notification. So the reporter force-flushes the exporters with a **bounded**
+  2s budget before the runtime tears the process down; a wedged collector can't
+  hold a dying process hostage.
+
 ### ASP.NET Core
 
 ```csharp

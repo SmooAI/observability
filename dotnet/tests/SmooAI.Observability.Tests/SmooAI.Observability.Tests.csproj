@@ -11,6 +11,13 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <LangVersion>latest</LangVersion>
+    <!--
+      UnhandledCrashTests re-launches this assembly as a child process that really
+      crashes, so it needs a real entry point (Program.cs) instead of the test
+      SDK's generated stub. VSTest loads the assembly into testhost and never
+      calls Main, so normal `dotnet test` discovery is unaffected.
+    -->
+    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
 
   <ItemGroup>

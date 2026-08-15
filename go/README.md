@@ -139,6 +139,49 @@ Neither framework installs panic recovery by default in the way the host app
 expects, so pair the middleware with the framework's own recovery
 (`recover.New()` for Fiber, `gin.Recovery()` for Gin) when you rely on re-panic.
 
+## Unhandled crashes (panics)
+
+**Go has no global unhandled-panic hook.** Rust has `panic::set_hook`, Node has
+`process.on('uncaughtException')`, Python has `sys.excepthook`; Go has nothing
+equivalent — an unrecovered panic runs that goroutine's defers, prints the
+traceback and kills the process, and `recover` only works on the SAME goroutine.
+So crash reporting here is opt-in per goroutine, and the gap below is real:
+
+```go
+func main() {
+    ctx := context.Background()
+    obs.Bootstrap(ctx, nil)
+    defer obs.RecoverAndReport(ctx) // main goroutine
+
+    go func() {
+        defer obs.RecoverAndReport(ctx) // every goroutine you spawn
+        work()
+    }()
+}
+```
+
+`RecoverAndReport` emits a FATAL log record and an `exception` event on the
+active span (status ERROR), force-flushes both pipelines within
+`obs.CrashFlushTimeout` (default 2s — batched exporters would otherwise take the
+report to the grave), and then **re-panics**: same panic value, same traceback,
+same exit status. It must be deferred directly; a panic inside it can never
+replace your panic.
+
+| Case | Reported? |
+| --- | --- |
+| Goroutine with `defer obs.RecoverAndReport(ctx)` | yes |
+| Panic in an HTTP handler (net/http, Fiber, Gin middleware) | yes — already |
+| Goroutine spawned without the defer | **no — nothing can see it** |
+| Runtime fatal errors (concurrent map writes, deadlock, OOM, stack overflow) | **no — unrecoverable by design** |
+| `os.Exit`, SIGKILL | **no** |
+
+`debug.SetCrashOutput` (Go 1.23+) does not close that gap: it only redirects the
+runtime's crash *text* to a second fd, with nothing of ours running afterwards.
+Acting on it needs a separate monitor process reading a pipe (the
+`x/telemetry` crashmonitor pattern), which an SDK can't impose on its host —
+and pointing it at a file to report on next boot loses the file exactly when it
+matters, since a restarted container comes back with a fresh writable layer.
+
 ## Wire format
 
 `ObservabilityEvent` JSON is byte-compatible with the TS `ObservabilityEvent`
@@ -151,6 +194,9 @@ so one backend ingest endpoint (`type: "error"`) serves both SDKs. The SDK name
 - **Echo adapter** — `net/http`, Fiber, and Gin ship (see above). Echo can be
   added the same way: a thin adapter over the same `Scope` + `CaptureException`
   primitives, as its own `go/echo` module.
+- **Global crash hook** — impossible in Go; `RecoverAndReport` covers a
+  goroutine at a time (see above). Goroutines the consumer spawns without the
+  defer, and runtime fatal errors, are NOT reported.
 - **Span-implicit capture** — Go has no ambient span, so span-correlated
   capture uses `CaptureExceptionOnSpan(ctx, ...)` (reads the span off `ctx`).
   The plain `CaptureException` still records via transport + a synthetic span.

@@ -139,6 +139,13 @@ public static class Bootstrap
             // Route captures through OTel span events in addition to the webhook.
             OtelCapture.Register();
 
+            // A process that dies from an unhandled exception — or silently drops a
+            // faulted Task nobody awaited — reported nothing at all before this.
+            // Auto-wired here rather than opt-in for the same reason Rust's
+            // bootstrap installs the panic hook: an opt-in crash reporter is one
+            // nobody remembers to opt into.
+            GlobalHandlers.Register(otel);
+
             return Cache(new BootstrapResult { Installed = true, Otel = otel });
         }
         catch (Exception ex)
@@ -235,5 +242,8 @@ public static class Bootstrap
         {
             _result = null;
         }
+        // Run() subscribes process-wide crash handlers; leaving them attached would
+        // leak across tests (and block the test host's finalizer thread on flush).
+        GlobalHandlers.ResetForTests();
     }
 }
