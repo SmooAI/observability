@@ -54,8 +54,24 @@ public sealed class BootstrapEnv
 /// </summary>
 public sealed class BootstrapResult
 {
-    /// <summary>Whether the bootstrap actually ran.</summary>
+    /// <summary>
+    /// Whether the bootstrap actually ran (false = disabled or init threw).
+    /// <para>
+    /// NOTE: <c>Installed == true</c> only means bootstrap ran. It does NOT mean
+    /// anything is being exported — check <see cref="Exporting"/> for that. These
+    /// were the same flag until 2026-08-15, and the conflation hid a production
+    /// service emitting nothing for months: it had no endpoint configured, so no
+    /// OTLP exporter was ever built, yet bootstrap reported success.
+    /// </para>
+    /// </summary>
     public bool Installed { get; init; }
+
+    /// <summary>
+    /// Whether an OTLP exporter was actually installed — i.e. whether spans and
+    /// metrics have somewhere to go. False when no endpoint is configured, in
+    /// which case this SDK is a no-op for telemetry.
+    /// </summary>
+    public bool Exporting { get; init; }
 
     /// <summary>OTel handle (flush/shutdown). Null if init failed or was skipped.</summary>
     public OtelSdkHandle? Otel { get; init; }
@@ -95,7 +111,7 @@ public static class Bootstrap
 
         if (env.Disabled == true)
         {
-            return Cache(new BootstrapResult { Installed = false, Otel = null });
+            return Cache(new BootstrapResult { Installed = false, Exporting = false, Otel = null });
         }
 
         try
@@ -117,6 +133,26 @@ public static class Bootstrap
 
             var tracesEndpoint = env.TracesEndpoint ?? (env.Endpoint is not null ? $"{StripSlash(env.Endpoint)}/v1/traces" : null);
             var metricsEndpoint = env.MetricsEndpoint ?? (env.Endpoint is not null ? $"{StripSlash(env.Endpoint)}/v1/metrics" : null);
+
+            // The single most expensive silence this SDK can produce. With no
+            // endpoint nothing reaches a collector, yet every other signal (this
+            // result, the caller's own "observability enabled" log) still says
+            // healthy. Say it plainly and name the variable to set.
+            //
+            // Only traces + metrics count: ObservabilitySdk.Setup builds an
+            // exporter for exactly those two, and a LogsEndpoint alone is
+            // consumed by the ILoggingBuilder extension, not here — claiming
+            // Exporting on it would be the same lie in a new place.
+            var exporting = !string.IsNullOrEmpty(tracesEndpoint) || !string.IsNullOrEmpty(metricsEndpoint);
+            if (!exporting)
+            {
+                Warn(
+                    "NO OTLP ENDPOINT CONFIGURED — telemetry is NOT being exported. " +
+                    "Nothing this process emits will reach a collector. " +
+                    "Set SMOOAI_OBSERVABILITY_ENDPOINT (or a per-signal " +
+                    "OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT), or set " +
+                    "SMOOAI_OBSERVABILITY_DISABLED=true to make this silence deliberate.");
+            }
 
             var otel = ObservabilitySdk.Setup(new SetupOtelOptions
             {
@@ -146,12 +182,12 @@ public static class Bootstrap
             // nobody remembers to opt into.
             GlobalHandlers.Register(otel);
 
-            return Cache(new BootstrapResult { Installed = true, Otel = otel });
+            return Cache(new BootstrapResult { Installed = true, Exporting = exporting, Otel = otel });
         }
         catch (Exception ex)
         {
             Warn($"SDK init failed: {ex.Message}");
-            return Cache(new BootstrapResult { Installed = false, Otel = null });
+            return Cache(new BootstrapResult { Installed = false, Exporting = false, Otel = null });
         }
     }
 

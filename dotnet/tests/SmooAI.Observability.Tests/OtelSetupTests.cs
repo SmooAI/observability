@@ -2,6 +2,7 @@ using SmooAI.Observability.Otel;
 
 namespace SmooAI.Observability.Tests;
 
+[Collection(OtelGlobalStateCollection.Name)]
 public class OtelSetupTests
 {
     [Fact]

@@ -11,6 +11,7 @@ namespace SmooAI.Observability.Tests;
 /// is subscribed to it, so it's a reliable proxy for "the instrumentation
 /// registered its source".
 /// </summary>
+[Collection(OtelGlobalStateCollection.Name)]
 public class OtelInstrumentationTests
 {
     // Source names the OTel instrumentation packages subscribe to. Stable across

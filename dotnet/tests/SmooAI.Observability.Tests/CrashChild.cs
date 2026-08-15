@@ -97,20 +97,20 @@ internal static class CrashChild
                 throw new InvalidOperationException(MainThrowMarker);
 
             case "activity-throw":
-            {
-                var source = new ActivitySource(OtelSdkHandle.ActivitySourceName);
-                // Deliberately NOT in a `using`: an unhandled exception terminates
-                // without unwinding, so a `using` here would be a lie about what
-                // happens at crash time — and the whole point is that the SDK has
-                // to stop this activity itself or it never reaches the exporter.
-                var activity = source.StartActivity(ActivityName, ActivityKind.Internal);
-                if (activity is null)
                 {
-                    Console.Error.WriteLine("NO-ACTIVITY-LISTENER");
-                    return 4;
+                    var source = new ActivitySource(OtelSdkHandle.ActivitySourceName);
+                    // Deliberately NOT in a `using`: an unhandled exception terminates
+                    // without unwinding, so a `using` here would be a lie about what
+                    // happens at crash time — and the whole point is that the SDK has
+                    // to stop this activity itself or it never reaches the exporter.
+                    var activity = source.StartActivity(ActivityName, ActivityKind.Internal);
+                    if (activity is null)
+                    {
+                        Console.Error.WriteLine("NO-ACTIVITY-LISTENER");
+                        return 4;
+                    }
+                    throw new InvalidOperationException(ActivityThrowMarker);
                 }
-                throw new InvalidOperationException(ActivityThrowMarker);
-            }
 
             case "unobserved-task":
                 CreateFaultedTaskAndDropIt();
