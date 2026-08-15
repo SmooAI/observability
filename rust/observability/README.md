@@ -18,7 +18,8 @@ error-safe and degrades to a no-op (plus one stderr line) rather than panicking.
 | Stack capture (`backtrace`)        | `stack-parser.ts` (string parse)   | ✅   |
 | Scope / context (per-task)         | `scope.ts`                         | ✅   |
 | Breadcrumb buffer (max 100)        | `scope.ts`                         | ✅   |
-| PII scrubbing                      | `pii.ts`                           | ✅   |
+| PII scrubbing (credentials)        | `pii.ts`                           | ✅   |
+| PII **hashing** (email/phone/addr) | — (Rust only)                      | ✅   |
 | Batched webhook transport + retry  | `transport.ts`                     | ✅   |
 | OTLP traces + metrics export       | `otel/setup-otel-sdk.ts`           | ✅   |
 | Per-request M2M auth (no staleness)| `otel/auth-injecting-exporter.ts`  | ✅   |
@@ -62,6 +63,37 @@ walkthrough (scope, error capture with cause chains, `with_scope`, metrics).
   The OTLP exporter consults the [`TokenProvider`] on **every** export and
   re-mints on 401, so a rotated token is picked up on the next export with no
   exporter restart (the Rust analogue of the TS SMOODEV-1206 fix).
+
+## PII scrubbing
+
+Two classes, handled differently:
+
+- **Credentials** (`Bearer …`, `password=`, `token`/`api_key`/`secret=`, `sk-…`)
+  are **dropped**. A hash of a live token is still a token oracle.
+- **Personal identifiers** (email, phone, street address) are **hashed**:
+  `a@b.com` → `[email:9f2a41c8]`. The type prefix stays visible, so you can see
+  *what kind* of value was there and that two spans carry the *same* one —
+  without ever seeing it.
+
+The hash is **HMAC-SHA256**, not a bare digest (emails and phones are a small
+enumerable space a rainbow table reverses in seconds), and the org id is mixed
+into the message so the same value hashes **differently in different orgs**.
+
+```rust
+use smooai_observability::pii::{scrub_string_for_org, pii_token, PiiKind};
+
+let scrubbed = scrub_string_for_org("mail a@b.com", org_id);   // "mail [email:9f2a41c8]"
+// Search: hash the typed term the same way and match the stored token.
+let needle = pii_token(PiiKind::Email, "A@B.com", org_id);
+```
+
+Set the key with `SMOOAI_OBSERVABILITY_PII_HASH_KEY` (read by `bootstrap()`) or
+`pii::set_pii_hash_key`. **With no key, personal identifiers are fully redacted**
+(`[email:redacted]`) rather than hashed under a guessable one.
+
+⚠️ **The key and the org id are load-bearing.** Rotating either silently breaks
+correlation with every hash already stored — treat the key as permanent, and do
+not reuse a secret that rotates on a schedule.
 
 ## GenAI spans
 

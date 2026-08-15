@@ -212,7 +212,17 @@ mod tests {
         client.capture_message("just fyi", Level::Info);
 
         provider.force_flush().ok();
-        let spans = exporter.get_finished_spans().expect("exporter readable");
+        // Filter to the spans THIS test produced: the provider is process-wide,
+        // so every other test in the binary that opens a span exports into the
+        // same in-memory exporter. Counting everything made this assertion fail
+        // as the suite grew (8 spans, not 2) while still catching what it is
+        // for — a double-report shows up as three `capture_` spans, not two.
+        let spans: Vec<_> = exporter
+            .get_finished_spans()
+            .expect("exporter readable")
+            .into_iter()
+            .filter(|s| s.name.starts_with("observability.capture_"))
+            .collect();
         assert_eq!(spans.len(), 2, "one synthetic span per capture");
 
         let exception_span = spans
