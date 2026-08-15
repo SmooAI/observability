@@ -26,6 +26,10 @@ init errors are logged to stderr and the SDK falls back to a no-op.
   SMOOAI_OBSERVABILITY_RELEASE        — default GIT_SHA / "dev".
   SMOOAI_OBSERVABILITY_DSN            — webhook DSN for the Errors dashboard.
   SMOOAI_OBSERVABILITY_DISABLED       — "1"/"true" to skip bootstrap entirely.
+SMOOAI_OBSERVABILITY_PII_HASH_KEY   — HMAC key used to hash emails / phones /
+                                      addresses in scrubbed strings (see
+                                      ``smooai_observability.pii``). Unset means
+                                      personal identifiers are fully redacted.
 """
 
 from __future__ import annotations
@@ -36,6 +40,7 @@ from dataclasses import dataclass
 
 from ..auth.token_provider import TokenProvider, TokenProviderError
 from ..client import Client, ClientOptions
+from ..pii import set_pii_hash_key
 from ..transport import Transport
 
 
@@ -54,6 +59,7 @@ class BootstrapEnv:
     environment: str | None = None
     release: str | None = None
     disabled: bool = False
+    pii_hash_key: str | None = None
 
 
 @dataclass
@@ -129,7 +135,14 @@ def bootstrap_observability(
         or os.environ.get("NODE_ENV"),
         release=o.release or os.environ.get("SMOOAI_OBSERVABILITY_RELEASE") or os.environ.get("GIT_SHA") or "dev",
         disabled=o.disabled or _truthy(os.environ.get("SMOOAI_OBSERVABILITY_DISABLED")),
+        pii_hash_key=o.pii_hash_key or os.environ.get("SMOOAI_OBSERVABILITY_PII_HASH_KEY"),
     )
+
+    # Before anything can emit: a scrubbed string written without this key
+    # redacts PII outright, so installing it late would silently produce a
+    # window of uncorrelatable spans rather than an error.
+    if env.pii_hash_key:
+        set_pii_hash_key(env.pii_hash_key)
 
     if env.disabled:
         _bootstrapped = BootstrapResult(installed=False)

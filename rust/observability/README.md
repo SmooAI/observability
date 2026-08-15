@@ -19,7 +19,7 @@ error-safe and degrades to a no-op (plus one stderr line) rather than panicking.
 | Scope / context (per-task)         | `scope.ts`                         | ✅   |
 | Breadcrumb buffer (max 100)        | `scope.ts`                         | ✅   |
 | PII scrubbing (credentials)        | `pii.ts`                           | ✅   |
-| PII **hashing** (email/phone/addr) | — (Rust only)                      | ✅   |
+| PII **hashing** (email/phone/addr) | `pii.ts` (all 5 SDKs)              | ✅   |
 | Batched webhook transport + retry  | `transport.ts`                     | ✅   |
 | OTLP traces + metrics export       | `otel/setup-otel-sdk.ts`           | ✅   |
 | Per-request M2M auth (no staleness)| `otel/auth-injecting-exporter.ts`  | ✅   |
@@ -90,6 +90,10 @@ let needle = pii_token(PiiKind::Email, "A@B.com", org_id);
 Set the key with `SMOOAI_OBSERVABILITY_PII_HASH_KEY` (read by `bootstrap()`) or
 `pii::set_pii_hash_key`. **With no key, personal identifiers are fully redacted**
 (`[email:redacted]`) rather than hashed under a guessable one.
+
+The TypeScript, Go, Python and .NET SDKs implement the identical scheme and emit
+byte-identical tokens; the shared vectors are asserted in every SDK's PII test
+suite (`cross_sdk_parity_vectors`).
 
 ⚠️ **The key and the org id are load-bearing.** Rotating either silently breaks
 correlation with every hash already stored — treat the key as permanent, and do

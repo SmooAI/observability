@@ -29,8 +29,9 @@
 //! in `before_send`.
 //!
 //! Credential patterns are a direct port of the TS `pii.ts` patterns. The
-//! hashing layer is Rust-only today — the other four SDKs still scrub
-//! credentials only.
+//! hashing layer is implemented identically in all five SDKs (TypeScript, Rust,
+//! Go, Python, .NET) — see `cross_sdk_parity_vectors` for the shared vectors
+//! every port asserts verbatim.
 
 use once_cell::sync::{Lazy, OnceCell};
 use regex::Regex;
@@ -409,6 +410,40 @@ mod tests {
             .to_string();
         assert_eq!(hex.len(), HASH_HEX_LEN, "{t}");
         assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "{t}");
+    }
+
+    /// Pins the exact bytes every SDK must produce. Computed independently
+    /// (python `hmac.new(key, org\0kind\0normalized, "sha256")`) and asserted
+    /// verbatim in the TS, Go, Python and .NET ports too. If any SDK's message
+    /// framing, normalization or truncation drifts, exactly one of these breaks.
+    #[test]
+    fn cross_sdk_parity_vectors() {
+        let cases = [
+            (PiiKind::Email, "a@b.com", "org-1", "[email:02ea437f]"),
+            (PiiKind::Email, "A@B.COM ", "org-1", "[email:02ea437f]"),
+            (PiiKind::Email, "a@b.com", "org-2", "[email:fd96f7dc]"),
+            (PiiKind::Email, "a@b.com", "", "[email:453b154f]"),
+            (
+                PiiKind::Phone,
+                "(415) 555-0142",
+                "org-1",
+                "[phone:415a9aea]",
+            ),
+            (PiiKind::Phone, "415-555-0142", "org-1", "[phone:415a9aea]"),
+            (
+                PiiKind::Address,
+                "1600  Pennsylvania   Ave",
+                "org-1",
+                "[address:c5351f4a]",
+            ),
+        ];
+        for (kind, raw, org, want) in cases {
+            assert_eq!(
+                token_with_key(kind, raw, org, Some(KEY)),
+                want,
+                "{kind:?} {raw:?} {org:?}"
+            );
+        }
     }
 
     #[test]

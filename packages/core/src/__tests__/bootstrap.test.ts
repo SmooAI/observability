@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { _resetBootstrapForTests, bootstrapObservability } from '../bootstrap';
 import { _resetOtelSdkForTests } from '../otel';
+import { _resetPiiHashKeyForTests, _tokenWithKey, piiToken, scrubString } from '../pii';
 
 // Capture stderr writes so we can assert on the bootstrap warning paths
 // without polluting test output.
@@ -141,5 +142,36 @@ describe('bootstrapObservability', () => {
                 endpoint: 'not-a-url',
             }),
         ).resolves.toBeDefined();
+    });
+});
+
+describe('bootstrapObservability — PII hash key', () => {
+    it('installs the key from SMOOAI_OBSERVABILITY_PII_HASH_KEY before anything can emit', async () => {
+        const previous = process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY;
+        process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY = 'env-supplied-key';
+        _resetPiiHashKeyForTests();
+        try {
+            // Disabled bootstrap still installs the key — the scrubber runs
+            // whether or not there is an exporter behind it.
+            await bootstrapObservability({ disabled: true });
+            expect(piiToken('email', 'a@b.com', 'org-1')).toBe(_tokenWithKey('email', 'a@b.com', 'org-1', new TextEncoder().encode('env-supplied-key')));
+        } finally {
+            _resetPiiHashKeyForTests();
+            if (previous === undefined) delete process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY;
+            else process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY = previous;
+        }
+    });
+
+    it('leaves PII redacted when no key is configured', async () => {
+        const previous = process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY;
+        delete process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY;
+        _resetPiiHashKeyForTests();
+        try {
+            await bootstrapObservability({ disabled: true });
+            expect(scrubString('mail a@b.com')).toBe('mail [email:redacted]');
+        } finally {
+            _resetPiiHashKeyForTests();
+            if (previous !== undefined) process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY = previous;
+        }
     });
 });

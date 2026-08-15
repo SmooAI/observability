@@ -47,6 +47,13 @@ public sealed class BootstrapEnv
 
     /// <summary>Skip bootstrap entirely.</summary>
     public bool? Disabled { get; set; }
+
+    /// <summary>
+    /// HMAC key used to hash emails / phones / addresses in scrubbed strings
+    /// (see <see cref="Pii"/>). Unset means personal identifiers are fully
+    /// redacted rather than hashed.
+    /// </summary>
+    public string? PiiHashKey { get; set; }
 }
 
 /// <summary>
@@ -108,6 +115,11 @@ public static class Bootstrap
         }
 
         var env = ResolveEnv(overrides);
+
+        // Before anything can emit: a scrubbed string written without this key
+        // redacts PII outright, so installing it late would silently produce a
+        // window of uncorrelatable spans rather than an error.
+        Pii.SetPiiHashKey(env.PiiHashKey);
 
         if (env.Disabled == true)
         {
@@ -242,6 +254,7 @@ public static class Bootstrap
             Release = overrides?.Release ?? Env("SMOOAI_OBSERVABILITY_RELEASE") ?? Env("GIT_SHA") ?? Env("LAMBDA_FUNCTION_VERSION") ?? "dev",
             Dsn = overrides?.Dsn ?? Env("SMOOAI_OBSERVABILITY_DSN") ?? Env("OBSERVABILITY_DSN"),
             Disabled = overrides?.Disabled ?? Truthy(Env("SMOOAI_OBSERVABILITY_DISABLED")),
+            PiiHashKey = overrides?.PiiHashKey ?? Env("SMOOAI_OBSERVABILITY_PII_HASH_KEY"),
         };
     }
 

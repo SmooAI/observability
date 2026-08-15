@@ -23,7 +23,8 @@ import (
 //
 // Optional: _SERVICE_NAME (default "smoo-service"), _ENVIRONMENT
 // (default STAGE / GO_ENV / "unknown"), _RELEASE (default GIT_SHA / "dev"),
-// _DISABLED ("1"/"true" to skip).
+// _DISABLED ("1"/"true" to skip), _PII_HASH_KEY (HMAC key for hashing emails /
+// phones / addresses — unset means they are fully redacted; see pii.go).
 
 // BootstrapResult reports what the bootstrap did.
 type BootstrapResult struct {
@@ -61,6 +62,11 @@ type BootstrapEnv struct {
 	// to both OTel and the Errors dashboard (SMOODEV-1148 parity). Resolved
 	// from OBSERVABILITY_DSN when not overridden.
 	DSN string
+	// PiiHashKey is the HMAC key used to hash emails / phones / addresses in
+	// scrubbed strings (see pii.go). Unset means personal identifiers are fully
+	// redacted rather than hashed. Resolved from
+	// SMOOAI_OBSERVABILITY_PII_HASH_KEY.
+	PiiHashKey string
 }
 
 var (
@@ -87,6 +93,13 @@ func Bootstrap(ctx context.Context, overrides *BootstrapEnv) BootstrapResult {
 	}()
 
 	env := resolveEnv(overrides)
+
+	// Before anything can emit: a scrubbed string written without this key
+	// redacts PII outright, so installing it late would silently produce a
+	// window of uncorrelatable spans rather than an error.
+	if env.PiiHashKey != "" {
+		SetPiiHashKey([]byte(env.PiiHashKey))
+	}
 
 	if env.Disabled {
 		result = BootstrapResult{Installed: false}
@@ -211,6 +224,7 @@ func resolveEnv(o *BootstrapEnv) BootstrapEnv {
 		Release:         firstNonEmpty(o.Release, os.Getenv("SMOOAI_OBSERVABILITY_RELEASE"), os.Getenv("GIT_SHA"), "dev"),
 		Disabled:        o.Disabled || truthy(os.Getenv("SMOOAI_OBSERVABILITY_DISABLED")),
 		DSN:             firstNonEmpty(o.DSN, os.Getenv("OBSERVABILITY_DSN")),
+		PiiHashKey:      pick(o.PiiHashKey, "SMOOAI_OBSERVABILITY_PII_HASH_KEY"),
 	}
 }
 

@@ -141,3 +141,30 @@ wrapper covers Groq / DeepSeek / Azure / any OpenAI-compatible gateway via
 ## License
 
 MIT
+
+## PII scrubbing
+
+Two classes, handled differently:
+
+- **Credentials** (`Bearer …`, `password=`, `token`/`api_key`/`secret=`, `sk-…`)
+  are **dropped**. A hash of a live token is still a token oracle.
+- **Personal identifiers** (email, phone, street address) are **hashed**:
+  `a@b.com` → `[email:9f2a41c8]`. The type prefix stays visible, so you can see
+  _what kind_ of value was there and that two spans carry the _same_ one —
+  without ever seeing it.
+
+The hash is **HMAC-SHA256**, not a bare digest (emails and phones are a small
+enumerable space a rainbow table reverses in seconds), and the org id is mixed
+into the message so the same value hashes **differently in different orgs**.
+
+Set the key with `SMOOAI_OBSERVABILITY_PII_HASH_KEY` (read by the bootstrap) or
+`setPiiHashKey(...)` (the browser bundle has no env — call it explicitly). **With no key, personal identifiers are fully redacted**
+(`[email:redacted]`) rather than hashed under a guessable one.
+
+⚠️ **The key and the org id are load-bearing.** Rotating either silently breaks
+correlation with every hash already stored — treat the key as permanent, and do
+not reuse a secret that rotates on a schedule.
+
+All five SDKs (TypeScript, Rust, Go, Python, .NET) emit byte-identical tokens
+for the same key/org/value; the shared vectors are asserted in each SDK's PII
+test suite.

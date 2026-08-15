@@ -34,7 +34,7 @@
 - 🗺️ **Source maps** — uploaded to S3 at build time, applied lazily on view
 - 🚪 **Beacon flush** — events queued at `pagehide` ship via `navigator.sendBeacon`
 - 💾 **Offline queue** — events captured while offline persist in `IndexedDB` and retry on focus
-- 🔐 **PII scrub** — `password`, `token`, `Bearer ...`, and friends are redacted before transport
+- 🔐 **PII scrub** — credentials (`password`, `token`, `Bearer ...`) are dropped; emails / phones / addresses are HMAC-hashed per-org (`a@b.com` → `[email:9f2a41c8]`) so traces stay correlatable without storing the value
 
 **Node**
 
@@ -42,7 +42,7 @@
 - 🪢 **Hono middleware** — captures errors propagating to the global `onError` handler
 - 🧠 **AsyncLocalStorage scope** — per-request user, tags, breadcrumbs without leaking across requests
 - 📦 **Batched transport** — `undici` with retry / backoff
-- 🔐 **Same PII scrub policy** as the browser
+- 🔐 **Same PII scrub policy** as the browser — key from `SMOOAI_OBSERVABILITY_PII_HASH_KEY`
 
 **React / Next.js**
 
@@ -55,7 +55,8 @@
 
 - `console.log` / `console.info` / `console.warn` — only `console.error` is tapped, and that's opt-out
 - HTTP request **bodies** — only method, path, status, and duration appear in breadcrumbs
-- Anything matching the PII scrub regex unless you explicitly allowlist it
+- Credentials matching the PII scrub regex — dropped outright, never hashed
+- Raw emails / phones / street addresses — replaced by a keyed per-org hash, never stored in the clear
 
 ## 📦 Install
 
@@ -200,7 +201,7 @@ Known divergences: TypeScript, Python, Go and .NET emit `gen_ai.tool.names` as a
 
 ## 📖 Architecture
 
-The SDK is intentionally thin. It captures, batches, redacts PII, and POSTs to a Smoo ingest endpoint. All of the heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the Smoo platform.
+The SDK is intentionally thin. It captures, batches, redacts credentials, hashes personal identifiers, and POSTs to a Smoo ingest endpoint. All of the heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the Smoo platform.
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{
@@ -236,7 +237,7 @@ This SDK is opinionated about privacy:
 - We never capture form bodies, request bodies, or response bodies by default
 - We never capture cookies
 - We never send anything to a third-party service — your events go to **your** Smoo backend only
-- PII scrubbing is enabled by default and can be tuned per-tenant
+- PII scrubbing is enabled by default and can be tuned per-tenant. Personal identifiers are hashed with HMAC-SHA256 under a key you supply (`SMOOAI_OBSERVABILITY_PII_HASH_KEY`), salted by org id — identical across the TypeScript, Rust, Go, Python and .NET SDKs. **With no key configured they are fully redacted, never hashed under a guessable one.**
 
 ## 📖 Status
 
