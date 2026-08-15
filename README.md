@@ -158,6 +158,46 @@ The same ingest contract (`POST /webhooks/observability/{org_id}/{token}` with `
 - 🐹 **Go** — `github.com/smooai/observability-go` (tracked in SMOODEV-1067 follow-ups)
 - 💠 **.NET** — `SmooAI.Observability` on NuGet (tracked in SMOODEV-1067 follow-ups)
 
+### 🤖 GenAI telemetry (`gen_ai.*`)
+
+LLM and agent spans carry the [OTel GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/), so any semconv-aware backend reads them — Smoo's LLM dashboard routes on `gen_ai.system` alone.
+
+```ts
+import OpenAI from 'openai';
+import { wrapOpenAI } from '@smooai/observability';
+
+// Instruments chat.completions.create — the original client is untouched.
+const openai = wrapOpenAI(new OpenAI(), {
+    conversationId: conversation.id,
+    // Providers don't return a price. Supply one and the cost column fills in.
+    costUsd: ({ inputTokens = 0, outputTokens = 0 }) => inputTokens * 2.5e-6 + outputTokens * 1e-5,
+});
+```
+
+The same wrapper covers Groq, Together, Fireworks, DeepSeek, Azure OpenAI, and any OpenAI-compatible gateway — pass `{ system: 'groq' }` so spans attribute to the real provider. Prompt and completion **content is off by default**; `{ recordContent: true }` records it as `gen_ai.*.message` span events, PII-scrubbed on the way out.
+
+For hand-rolled calls, set the attributes directly:
+
+```ts
+import { setGenAIAttributes, recordGenAIMessage } from '@smooai/observability';
+
+setGenAIAttributes(span, { system: 'anthropic', operationName: 'chat', requestModel: 'claude-opus-4-7', usageInputTokens: 812, usageOutputTokens: 96 });
+```
+
+> `gen_ai.operation.name` is a straight passthrough on ingest with **no fallback** — leave it unset and the operation column lands `NULL`. Always set it.
+
+**Parity across the five SDKs:**
+
+| SDK            | Attribute helper              | Message events                | Content PII-scrubbed | Framework integration                               |
+| -------------- | ----------------------------- | ----------------------------- | -------------------- | --------------------------------------------------- |
+| **TypeScript** | `setGenAIAttributes`          | `recordGenAIMessage`          | ✅                   | ✅ `wrapOpenAI` — OpenAI Node SDK + compatible APIs |
+| **Rust**       | `set_gen_ai_attributes`       | `record_gen_ai_message`       | ❌                   | —                                                   |
+| **Python**     | `set_gen_ai_attributes`       | `record_gen_ai_message`       | ❌                   | ✅ `SmooAICallbackHandler` — LangChain / LangGraph  |
+| **Go**         | `SetGenAIAttributes`          | `RecordGenAIMessage`          | ❌                   | —                                                   |
+| **.NET**       | `GenAIActivity.SetAttributes` | `GenAIActivity.RecordMessage` | ❌                   | —                                                   |
+
+Known divergences: TypeScript, Python, Go and .NET emit `gen_ai.tool.names` as a **string array**; Rust emits a comma-joined string. Only TypeScript scrubs recorded message content today.
+
 ## 📖 Architecture
 
 The SDK is intentionally thin. It captures, batches, redacts PII, and POSTs to a Smoo ingest endpoint. All of the heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the Smoo platform.

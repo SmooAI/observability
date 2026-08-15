@@ -9,6 +9,10 @@ export { Client } from './client';
 // attributes to LLM/agent spans for the Smoo LLM dashboard + any
 // GenAI-semconv-aware OTel backend (Datadog, Honeycomb, Phoenix, …).
 export { setGenAIAttributes, recordGenAIMessage, type GenAIAttributes, type GenAIOperationName, type GenAISystem } from './gen-ai-attributes';
+// SMOODEV-1155 follow-up: OpenAI Node SDK instrumentation. The OpenAI wire
+// shape is what Groq / Together / DeepSeek / Azure / our LiteLLM gateway all
+// speak, so one wrapper covers every provider reachable through that client.
+export { wrapOpenAI, type WrapOpenAIOptions, type GenAICostInput } from './gen-ai-openai';
 // ADR-097: session-scoped sampling, config-served telemetry settings, and W3C
 // traceparent. Parity across the five SDKs is enforced by
 // `parity/sampling-corpus.json` — see `parity/README.md`.

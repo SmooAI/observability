@@ -103,6 +103,30 @@ deterministic, stable for a page's lifetime, and reproduced byte-identically by
 the Rust / Python / Go / .NET SDKs against
 [`parity/sampling-corpus.json`](../../parity/README.md).
 
+## GenAI spans
+
+```ts
+import OpenAI from 'openai';
+import { wrapOpenAI, setGenAIAttributes } from '@smooai/observability';
+
+const openai = wrapOpenAI(new OpenAI(), { conversationId: convo.id });
+await openai.chat.completions.create({ model: 'gpt-4o', messages });
+```
+
+`wrapOpenAI` proxies `chat.completions.create` (streaming included — the span
+stays open until the stream drains) and emits the OTel
+[GenAI semconv](https://opentelemetry.io/docs/specs/semconv/gen-ai/) attributes.
+It needs no dependency on `openai`; the client is duck-typed, so the same
+wrapper covers Groq / DeepSeek / Azure / any OpenAI-compatible gateway via
+`{ system: 'groq' }`.
+
+- **Cost**: nothing computes a price on its own. Pass `costUsd(...)` to fill
+  `gen_ai.usage.cost_usd`.
+- **Content**: prompts and completions are **not** recorded unless you pass
+  `{ recordContent: true }`, and are PII-scrubbed when you do.
+- **Hand-rolled calls**: `setGenAIAttributes(span, attrs)` /
+  `recordGenAIMessage(span, role, content)`.
+
 ## What it does NOT do
 
 - Does not capture `console.log` / `console.info` / `console.warn`
