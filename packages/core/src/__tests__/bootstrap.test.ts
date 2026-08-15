@@ -85,6 +85,49 @@ describe('bootstrapObservability', () => {
         }
     });
 
+    // --- honest export status -------------------------------------------
+    // Both halves matter. With only one asserted, an implementation that
+    // hard-codes either value passes.
+
+    it('reports exporting=false and warns loudly when no endpoint is configured', async () => {
+        const saved = {
+            base: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+            traces: process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT,
+            metrics: process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT,
+            logs: process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT,
+        };
+        // A previous bootstrap in this process may have set these — the
+        // function writes them and never clears them.
+        delete process.env.OTEL_EXPORTER_OTLP_ENDPOINT;
+        delete process.env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
+        delete process.env.OTEL_EXPORTER_OTLP_METRICS_ENDPOINT;
+        delete process.env.OTEL_EXPORTER_OTLP_LOGS_ENDPOINT;
+        try {
+            const result = await bootstrapObservability({ token: 't', serviceName: 'svc' });
+            expect(result.installed).toBe(true); // bootstrap ran…
+            expect(result.exporting).toBe(false); // …but nothing has anywhere to go
+            expect(stderr.join('')).toContain('NO OTLP ENDPOINT CONFIGURED');
+            expect(stderr.join('')).toContain('SMOOAI_OBSERVABILITY_DISABLED=true');
+        } finally {
+            for (const [key, value] of [
+                ['OTEL_EXPORTER_OTLP_ENDPOINT', saved.base],
+                ['OTEL_EXPORTER_OTLP_TRACES_ENDPOINT', saved.traces],
+                ['OTEL_EXPORTER_OTLP_METRICS_ENDPOINT', saved.metrics],
+                ['OTEL_EXPORTER_OTLP_LOGS_ENDPOINT', saved.logs],
+            ] as [string, string | undefined][]) {
+                if (value) process.env[key] = value;
+                else delete process.env[key];
+            }
+        }
+    });
+
+    it('reports exporting=true and stays quiet when an endpoint IS configured', async () => {
+        const result = await bootstrapObservability({ token: 't', endpoint: 'https://api.test' });
+        expect(result.installed).toBe(true);
+        expect(result.exporting).toBe(true);
+        expect(stderr.join('')).not.toContain('NO OTLP ENDPOINT CONFIGURED');
+    });
+
     it('does not crash the host when SDK init throws — returns installed=false', async () => {
         // Force a bad endpoint that surfaces during exporter validation in
         // some otel-js versions. We can't reliably force a throw in the SDK

@@ -28,7 +28,17 @@ import (
 // BootstrapResult reports what the bootstrap did.
 type BootstrapResult struct {
 	// Installed is false when disabled or already bootstrapped.
+	//
+	// NOTE: Installed == true only means bootstrap ran. It does NOT mean
+	// anything is being exported — check Exporting for that. These were the
+	// same flag until 2026-08-15, and the conflation hid a production service
+	// emitting nothing for months: it had no endpoint configured, so no OTLP
+	// exporter was ever built, yet bootstrap reported success.
 	Installed bool
+	// Exporting reports whether an OTLP exporter was actually installed — i.e.
+	// whether spans, metrics and logs have somewhere to go. False when no
+	// endpoint is configured, in which case this SDK is a no-op for telemetry.
+	Exporting bool
 	// Otel is the SDK handle (nil if init failed or was skipped).
 	Otel *OtelSDKHandle
 }
@@ -122,6 +132,19 @@ func Bootstrap(ctx context.Context, overrides *BootstrapEnv) BootstrapResult {
 		logEndpoint = strings.TrimRight(env.Endpoint, "/") + "/v1/logs"
 	}
 
+	// The single most expensive silence this SDK can produce. With no endpoint
+	// nothing reaches a collector, yet every other signal (this result, the
+	// caller's own "observability enabled" log) still says healthy. Say it
+	// plainly and name the variable to set. SetupOtelSDK also honours the
+	// generic OTEL_EXPORTER_OTLP_ENDPOINT, so that counts as configured too.
+	if traceEndpoint == "" && metricEndpoint == "" && logEndpoint == "" && os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" {
+		warn("NO OTLP ENDPOINT CONFIGURED — telemetry is NOT being exported. " +
+			"Nothing this process emits will reach a collector. " +
+			"Set SMOOAI_OBSERVABILITY_ENDPOINT (or a per-signal " +
+			"OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT), or set " +
+			"SMOOAI_OBSERVABILITY_DISABLED=true to make this silence deliberate.")
+	}
+
 	otelHandle := SetupOtelSDK(ctx, SetupOtelOptions{
 		ServiceName:     env.ServiceName,
 		Environment:     env.Environment,
@@ -153,7 +176,13 @@ func Bootstrap(ctx context.Context, overrides *BootstrapEnv) BootstrapResult {
 		})
 	}
 
-	result = BootstrapResult{Installed: true, Otel: otelHandle}
+	// Truth comes from the handle, not from the endpoint strings: an endpoint
+	// whose exporter failed to construct leaves every provider nil, and that is
+	// just as much "not exporting" as having no endpoint at all.
+	exporting := otelHandle != nil &&
+		(otelHandle.TracerProvider != nil || otelHandle.MeterProvider != nil || otelHandle.LoggerProvider != nil)
+
+	result = BootstrapResult{Installed: true, Exporting: exporting, Otel: otelHandle}
 	bootstrapResult = &result
 	return result
 }

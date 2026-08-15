@@ -78,8 +78,26 @@ import { setupOtelSdk, type OtelSdkHandle, type SetupOtelOptions } from '../otel
 const TOKEN_REFRESH_INTERVAL_MS = 55 * 60 * 1000; // < openauth's 1h JWT TTL
 
 export interface BootstrapResult {
-    /** Whether the bootstrap actually ran (false = disabled or already-installed). */
+    /**
+     * Whether the bootstrap actually ran (false = disabled, already-installed,
+     * or init threw).
+     *
+     * NOTE: `installed: true` only means bootstrap was not disabled and did not
+     * throw. It does NOT mean anything is being exported — check
+     * {@link BootstrapResult.exporting} for that. These were the same flag
+     * until 2026-08-15, and the conflation hid a production service emitting
+     * nothing for months: it had no endpoint configured, so no OTLP destination
+     * was ever resolved, yet bootstrap reported success.
+     */
     installed: boolean;
+    /**
+     * Whether an OTLP endpoint was actually configured — i.e. whether spans,
+     * metrics and logs have somewhere to go. False when no endpoint resolves,
+     * in which case this SDK is a no-op for telemetry: the OTel exporters fall
+     * back to `http://localhost:4318`, which in a container drops everything
+     * silently and forever.
+     */
+    exporting: boolean;
     /** OTel SDK handle — flush / shutdown hooks. `null` if init failed or was skipped. */
     otel: OtelSdkHandle | null;
     /** Stops the background token-refresh timer. No-op if no timer was armed. */
@@ -119,7 +137,7 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
     };
 
     if (env.disabled) {
-        bootstrapped = { installed: false, otel: null, stopRefresh: () => {} };
+        bootstrapped = { installed: false, exporting: false, otel: null, stopRefresh: () => {} };
         return bootstrapped;
     }
 
@@ -167,6 +185,23 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
         const metricsEndpoint = env.metricsEndpoint ?? (env.endpoint ? `${stripTrailingSlash(env.endpoint)}/v1/metrics` : undefined);
         const logsEndpoint = env.logsEndpoint ?? (env.endpoint ? `${stripTrailingSlash(env.endpoint)}/v1/logs` : undefined);
 
+        // The single most expensive silence this SDK can produce. With no
+        // endpoint, nothing reaches a collector — but every other signal (the
+        // bootstrap return, the caller's own "observability enabled" log) still
+        // says healthy. Say it plainly instead, and name the variable to set.
+        // `setupOtelSdk` also honours the generic OTEL_EXPORTER_OTLP_ENDPOINT,
+        // so a destination configured that way still counts as exporting.
+        const exporting = Boolean(tracesEndpoint || metricsEndpoint || logsEndpoint || process.env.OTEL_EXPORTER_OTLP_ENDPOINT);
+        if (!exporting) {
+            warn(
+                'NO OTLP ENDPOINT CONFIGURED — telemetry is NOT being exported. ' +
+                    'Nothing this process emits will reach a collector. ' +
+                    'Set SMOOAI_OBSERVABILITY_ENDPOINT (or a per-signal ' +
+                    'OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT), or set ' +
+                    'SMOOAI_OBSERVABILITY_DISABLED=true to make this silence deliberate.',
+            );
+        }
+
         // Set process.env so any *other* OTel-aware code in the process
         // (e.g. third-party libraries that read the env directly) sees the
         // same endpoints. setupOtelSdk reads env too, so this also covers
@@ -199,11 +234,11 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
             release: env.release,
         });
 
-        bootstrapped = { installed: true, otel, stopRefresh };
+        bootstrapped = { installed: true, exporting, otel, stopRefresh };
     } catch (err) {
         warn(`bootstrap: SDK init failed: ${err instanceof Error ? err.message : String(err)}`);
         stopRefresh();
-        bootstrapped = { installed: false, otel: null, stopRefresh: () => {} };
+        bootstrapped = { installed: false, exporting: false, otel: null, stopRefresh: () => {} };
     }
 
     return bootstrapped;

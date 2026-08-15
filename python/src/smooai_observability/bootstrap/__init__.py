@@ -58,7 +58,23 @@ class BootstrapEnv:
 
 @dataclass
 class BootstrapResult:
+    """What the bootstrap did.
+
+    ``installed`` only means bootstrap ran (it was not disabled and did not
+    raise). It does NOT mean anything is being exported — that is ``exporting``.
+    These were the same flag until 2026-08-15, and the conflation hid a
+    production service emitting nothing for months: it had no endpoint
+    configured, so no OTLP destination was ever resolved, yet bootstrap reported
+    success.
+    """
+
     installed: bool
+    #: Whether an OTLP endpoint was actually configured — i.e. whether spans,
+    #: metrics and logs have somewhere to go. False when no endpoint resolves,
+    #: in which case this SDK is a no-op for telemetry: the OTel exporters fall
+    #: back to ``http://localhost:4318``, which in a container drops everything
+    #: silently and forever.
+    exporting: bool = False
     otel: object = None  # OtelSdkHandle | None
     transport: Transport | None = None
 
@@ -143,6 +159,21 @@ def bootstrap_observability(
         metrics_endpoint = env.metrics_endpoint or (f"{_strip_trailing_slash(env.endpoint)}/v1/metrics" if env.endpoint else None)
         logs_endpoint = env.logs_endpoint or (f"{_strip_trailing_slash(env.endpoint)}/v1/logs" if env.endpoint else None)
 
+        # The single most expensive silence this SDK can produce. With no
+        # endpoint nothing reaches a collector, yet every other signal (this
+        # result, the caller's own "observability enabled" log) still says
+        # healthy. Say it plainly and name the variable to set. setup_otel_sdk
+        # also honours the generic OTEL_EXPORTER_OTLP_ENDPOINT.
+        endpoint_configured = bool(traces_endpoint or metrics_endpoint or logs_endpoint or os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT"))
+        if not endpoint_configured:
+            _warn(
+                "NO OTLP ENDPOINT CONFIGURED — telemetry is NOT being exported. "
+                "Nothing this process emits will reach a collector. "
+                "Set SMOOAI_OBSERVABILITY_ENDPOINT (or a per-signal "
+                "OTEL_EXPORTER_OTLP_{TRACES,METRICS,LOGS}_ENDPOINT), or set "
+                "SMOOAI_OBSERVABILITY_DISABLED=true to make this silence deliberate."
+            )
+
         otel_handle = _maybe_setup_otel(
             service_name=env.service_name,
             environment=env.environment,
@@ -180,7 +211,11 @@ def bootstrap_observability(
         # exception reports nothing — the batched exporters go down with their queues full.
         _install_crash_handler(transport)
 
-        _bootstrapped = BootstrapResult(installed=True, otel=otel_handle, transport=transport)
+        # An endpoint whose provider setup failed (missing otlp extra, bad URL)
+        # is just as much "not exporting" as having no endpoint at all.
+        exporting = endpoint_configured and bool(getattr(otel_handle, "enabled", False))
+
+        _bootstrapped = BootstrapResult(installed=True, exporting=exporting, otel=otel_handle, transport=transport)
     except Exception as err:
         _warn(f"SDK init failed: {err}")
         _bootstrapped = BootstrapResult(installed=False)
