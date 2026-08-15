@@ -14,6 +14,7 @@
  * `GenAIAttributes` as new attributes stabilize.
  */
 import type { Span } from '@opentelemetry/api';
+import { scrubString } from './pii';
 
 export type GenAIOperationName = 'chat' | 'text_completion' | 'embeddings' | 'tool' | 'agent' | 'rerank';
 
@@ -102,6 +103,16 @@ export function setGenAIAttributes(span: Span, attrs: GenAIAttributes): void {
  * Emit a `gen_ai.user.message` / `gen_ai.assistant.message` / `gen_ai.system.message`
  * span event so the dashboard's prompt/completion side-by-side view can render
  * the actual content of the LLM call. Use sparingly — these are size-heavy.
+ *
+ * Content is PII-scrubbed via {@link scrubString} before it leaves the process —
+ * prompts and tool arguments are the single most PII-dense payload this SDK can
+ * touch, so raw content never reaches the wire.
+ *
+ * ponytail: `scrubString` in TS is credentials-only today (Bearer tokens, api
+ * keys, `password=`). Keyed per-org hashing of names / emails / phones exists in
+ * Rust (`rust/observability/src/pii.rs`) and is being ported to TS in a parallel
+ * PR — when it lands, this call site inherits it for free because it already
+ * routes through the SDK's one scrub entry point. Do not scrub inline here.
  */
 export function recordGenAIMessage(
     span: Span,
@@ -111,7 +122,7 @@ export function recordGenAIMessage(
 ): void {
     const eventName = `gen_ai.${role}.message`;
     span.addEvent(eventName, {
-        'gen_ai.message.content': content,
+        'gen_ai.message.content': scrubString(content),
         ...(extra?.toolCallId !== undefined && { 'gen_ai.tool_call.id': extra.toolCallId }),
         ...(extra?.toolName !== undefined && { 'gen_ai.tool.name': extra.toolName }),
     });
