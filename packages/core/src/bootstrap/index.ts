@@ -58,6 +58,13 @@
  *   SMOOAI_OBSERVABILITY_DISABLED       — set to "1"/"true" to skip
  *                                         bootstrap entirely (useful in
  *                                         tests).
+ *   SMOOAI_OBSERVABILITY_PII_HASH_KEY   — HMAC key used to hash emails /
+ *                                         phones / addresses in scrubbed
+ *                                         strings (see `../pii`). Unset
+ *                                         means personal identifiers are
+ *                                         fully redacted rather than hashed.
+ *                                         Set once; rotating it forks every
+ *                                         stored correlation.
  *
  * ## Behavior
  *
@@ -74,6 +81,7 @@
 import { TokenProvider } from '../auth/token-provider';
 import { Client } from '../node';
 import { setupOtelSdk, type OtelSdkHandle, type SetupOtelOptions } from '../otel';
+import { setPiiHashKey } from '../pii';
 
 const TOKEN_REFRESH_INTERVAL_MS = 55 * 60 * 1000; // < openauth's 1h JWT TTL
 
@@ -134,7 +142,13 @@ export async function bootstrapObservability(overrides: Partial<BootstrapEnv> = 
         environment: overrides.environment ?? process.env.SMOOAI_OBSERVABILITY_ENVIRONMENT ?? process.env.STAGE ?? process.env.NODE_ENV,
         release: overrides.release ?? process.env.SMOOAI_OBSERVABILITY_RELEASE ?? process.env.GIT_SHA ?? process.env.LAMBDA_FUNCTION_VERSION ?? 'dev',
         disabled: overrides.disabled ?? truthy(process.env.SMOOAI_OBSERVABILITY_DISABLED),
+        piiHashKey: overrides.piiHashKey ?? process.env.SMOOAI_OBSERVABILITY_PII_HASH_KEY,
     };
+
+    // Before anything can emit: a scrubbed string written without this key
+    // redacts PII outright, so installing it late would silently produce a
+    // window of uncorrelatable spans rather than an error.
+    if (env.piiHashKey) setPiiHashKey(env.piiHashKey);
 
     if (env.disabled) {
         bootstrapped = { installed: false, exporting: false, otel: null, stopRefresh: () => {} };
@@ -263,6 +277,12 @@ export interface BootstrapEnv {
     environment?: string;
     release?: string;
     disabled?: boolean;
+    /**
+     * HMAC key used to hash emails / phones / addresses in scrubbed strings
+     * (see `../pii`). Unset means personal identifiers are fully redacted
+     * rather than hashed.
+     */
+    piiHashKey?: string;
 }
 
 interface RefreshConfig {

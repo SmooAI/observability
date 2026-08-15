@@ -38,3 +38,8 @@ export {
     type TelemetrySettingsProvider,
 } from './telemetry-settings';
 export { parseTraceparent, formatTraceparent, type TraceContext } from './traceparent';
+// PII scrubbing / hashing. `setPiiHashKey` MUST be called before anything is
+// captured — without a key, emails / phones / addresses are redacted outright
+// rather than hashed. On Node `bootstrapObservability` does it from
+// SMOOAI_OBSERVABILITY_PII_HASH_KEY; the browser has no env, so call it here.
+export { scrubString, scrubStringForOrg, scrubHeaders, scrubHeadersForOrg, setPiiHashKey, piiToken, type PiiKind } from './pii';

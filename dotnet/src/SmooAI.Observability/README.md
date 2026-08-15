@@ -116,6 +116,7 @@ GenAIActivity.SetAttributes(Activity.Current, new GenAIAttributes
 | `SMOOAI_OBSERVABILITY_RELEASE` | Release id |
 | `SMOOAI_OBSERVABILITY_DSN` | Error-webhook DSN (optional) |
 | `SMOOAI_OBSERVABILITY_DISABLED` | `1`/`true` to skip bootstrap |
+| `SMOOAI_OBSERVABILITY_PII_HASH_KEY` | HMAC key for hashing emails / phones / addresses (unset = redacted) |
 
 ## Design notes
 
@@ -128,3 +129,30 @@ GenAIActivity.SetAttributes(Activity.Current, new GenAIAttributes
   SDK (`System.Text.Json`, nulls omitted).
 
 Tracking: [SMOODEV-1159](https://smooai.atlassian.net/browse/SMOODEV-1159).
+
+## PII scrubbing
+
+Two classes, handled differently:
+
+- **Credentials** (`Bearer …`, `password=`, `token`/`api_key`/`secret=`, `sk-…`)
+  are **dropped**. A hash of a live token is still a token oracle.
+- **Personal identifiers** (email, phone, street address) are **hashed**:
+  `a@b.com` → `[email:9f2a41c8]`. The type prefix stays visible, so you can see
+  *what kind* of value was there and that two spans carry the *same* one —
+  without ever seeing it.
+
+The hash is **HMAC-SHA256**, not a bare digest (emails and phones are a small
+enumerable space a rainbow table reverses in seconds), and the org id is mixed
+into the message so the same value hashes **differently in different orgs**.
+
+Set the key with `SMOOAI_OBSERVABILITY_PII_HASH_KEY` (read by the bootstrap) or
+`Pii.SetPiiHashKey(...)`. **With no key, personal identifiers are fully redacted**
+(`[email:redacted]`) rather than hashed under a guessable one.
+
+⚠️ **The key and the org id are load-bearing.** Rotating either silently breaks
+correlation with every hash already stored — treat the key as permanent, and do
+not reuse a secret that rotates on a schedule.
+
+All five SDKs (TypeScript, Rust, Go, Python, .NET) emit byte-identical tokens
+for the same key/org/value; the shared vectors are asserted in each SDK's PII
+test suite.

@@ -243,7 +243,6 @@ async fn build(env: BootstrapEnv) -> BootstrapResult {
     }
 }
 
-
 #[cfg(test)]
 mod exporting_status_tests {
     use super::*;

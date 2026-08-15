@@ -108,11 +108,14 @@ export function setGenAIAttributes(span: Span, attrs: GenAIAttributes): void {
  * prompts and tool arguments are the single most PII-dense payload this SDK can
  * touch, so raw content never reaches the wire.
  *
- * ponytail: `scrubString` in TS is credentials-only today (Bearer tokens, api
- * keys, `password=`). Keyed per-org hashing of names / emails / phones exists in
- * Rust (`rust/observability/src/pii.rs`) and is being ported to TS in a parallel
- * PR — when it lands, this call site inherits it for free because it already
- * routes through the SDK's one scrub entry point. Do not scrub inline here.
+ * That covers both classes: credentials (Bearer tokens, api keys, `password=`)
+ * are dropped, and emails / phones / addresses are hashed per-org. This call
+ * site inherited the hashing for free by routing through the SDK's one scrub
+ * entry point. Do not scrub inline here.
+ *
+ * ponytail: uses the org-less `scrubString`, so hashes are salted with the
+ * empty org — there is no org id in hand at this call site. Switch to
+ * `scrubStringForOrg` if one ever reaches here.
  */
 export function recordGenAIMessage(
     span: Span,

@@ -158,3 +158,14 @@ func TestBootstrapExportingWhenEndpointConfigured(t *testing.T) {
 		t.Error("expected a tracer provider when an endpoint is configured")
 	}
 }
+
+func TestResolveEnvReadsPiiHashKey(t *testing.T) {
+	t.Setenv("SMOOAI_OBSERVABILITY_PII_HASH_KEY", "env-supplied-key")
+	if got := resolveEnv(nil).PiiHashKey; got != "env-supplied-key" {
+		t.Errorf("PiiHashKey = %q, want the env value", got)
+	}
+	// An explicit override still wins.
+	if got := resolveEnv(&BootstrapEnv{PiiHashKey: "override"}).PiiHashKey; got != "override" {
+		t.Errorf("override ignored: %q", got)
+	}
+}
