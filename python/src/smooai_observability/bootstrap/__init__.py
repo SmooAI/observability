@@ -175,6 +175,10 @@ def bootstrap_observability(
             Client.register_transport(_send)
 
         _register_otel_capture()
+        # Rust installs its panic hook from bootstrap (rust/observability/src/bootstrap.rs);
+        # this is the same call site. Without it a process that dies from an uncaught
+        # exception reports nothing — the batched exporters go down with their queues full.
+        _install_crash_handler(transport)
 
         _bootstrapped = BootstrapResult(installed=True, otel=otel_handle, transport=transport)
     except Exception as err:
@@ -212,9 +216,26 @@ def _register_otel_capture() -> None:
         _warn(f"otel capture registration failed: {err}")
 
 
+def _install_crash_handler(transport: Transport | None) -> None:
+    try:
+        from ..crash import install_crash_handler
+
+        # OTel's providers are flushed by the handler itself; the webhook
+        # transport is the one drain it can't discover on its own.
+        install_crash_handler(flush=(lambda _timeout_s: transport.flush()) if transport is not None else None)
+    except Exception as err:  # pragma: no cover
+        _warn(f"crash handler installation failed: {err}")
+
+
 def reset_bootstrap_for_tests() -> None:
     """Test seam — NOT exported from the package entry."""
     global _bootstrapped
+    try:
+        from ..crash import reset_crash_handler_for_tests
+
+        reset_crash_handler_for_tests()
+    except Exception:
+        pass
     if _bootstrapped is not None and _bootstrapped.transport is not None:
         try:
             _bootstrapped.transport.shutdown()

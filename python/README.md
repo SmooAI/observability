@@ -28,6 +28,26 @@ except Exception as err:
     capture_exception(err, tags={"area": "ingest"})
 ```
 
+### Crash reporting
+
+`bootstrap_observability()` installs `sys.excepthook` **and** `threading.excepthook`, so a
+process that dies from an uncaught exception (or a worker thread that dies from one) reports
+before it goes away instead of vanishing silently — a CRITICAL log record plus a semconv
+`exception` span event with the span status set to `ERROR`, force-flushed under a 2s budget.
+
+It chains to whatever hook was already installed, so the interpreter's traceback still reaches
+stderr, and it is idempotent. Install it by hand if you don't use `bootstrap_observability`:
+
+```python
+from smooai_observability import install_crash_handler
+
+install_crash_handler()
+```
+
+Not covered: asyncio "Task exception was never retrieved". Those don't kill the process, and
+asyncio already logs them at ERROR through the stdlib `asyncio` logger — which the root OTel
+logging handler exports. An exception that escapes `asyncio.run` is a crash and is covered.
+
 ### Scoped context
 
 ```python

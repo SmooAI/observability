@@ -28,6 +28,7 @@ from .bootstrap import (
     bootstrap_observability,
 )
 from .client import Client, ClientOptions
+from .crash import install_crash_handler
 from .gen_ai_attributes import (
     GenAIAttributes,
     record_gen_ai_message,
@@ -99,6 +100,8 @@ __all__ = [
     "bootstrap_observability",
     "BootstrapEnv",
     "BootstrapResult",
+    # crash reporting
+    "install_crash_handler",
     # gen-ai
     "GenAIAttributes",
     "set_gen_ai_attributes",
