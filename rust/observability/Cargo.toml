@@ -31,6 +31,10 @@ uuid = { version = "1", features = ["v4"] }
 backtrace = "0.3"
 regex = "1"
 once_cell = "1"
+# Keyed PII hashing (`pii.rs`). Single-purpose, zero-dependency HMAC-SHA256 —
+# chosen over the `hmac` + `sha2` + `digest` trait stack because this crate needs
+# exactly one primitive and nothing generic over it.
+hmac-sha256 = "1"
 async-trait = "0.1"
 http = "1"
 bytes = "1"

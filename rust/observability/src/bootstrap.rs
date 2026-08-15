@@ -20,6 +20,10 @@
 //! - `SMOOAI_OBSERVABILITY_ENVIRONMENT` — default `STAGE` / `unknown`.
 //! - `SMOOAI_OBSERVABILITY_RELEASE` — default `GIT_SHA` / `dev`.
 //! - `SMOOAI_OBSERVABILITY_DISABLED` — `1`/`true` skips bootstrap entirely.
+//! - `SMOOAI_OBSERVABILITY_PII_HASH_KEY` — HMAC key used to hash emails /
+//!   phones / addresses in scrubbed strings (see [`crate::pii`]). Unset means
+//!   those values are fully redacted instead of hashed. **Rotating it breaks
+//!   correlation with every hash already stored** — treat it as permanent.
 //!
 //! Never panics: missing config / init errors are logged to stderr and the SDK
 //! degrades gracefully. Idempotent: a second call returns the same handle.
@@ -46,6 +50,7 @@ pub struct BootstrapEnv {
     pub environment: Option<String>,
     pub release: Option<String>,
     pub disabled: bool,
+    pub pii_hash_key: Option<String>,
 }
 
 impl BootstrapEnv {
@@ -69,6 +74,7 @@ impl BootstrapEnv {
                 .ok()
                 .or_else(|| env::var("GIT_SHA").ok()),
             disabled: truthy(env::var("SMOOAI_OBSERVABILITY_DISABLED").ok().as_deref()),
+            pii_hash_key: env::var("SMOOAI_OBSERVABILITY_PII_HASH_KEY").ok(),
         }
     }
 }
@@ -105,6 +111,13 @@ pub async fn bootstrap_with(env: BootstrapEnv) -> BootstrapResult {
 }
 
 async fn build(env: BootstrapEnv) -> BootstrapResult {
+    // Before anything can emit: a scrubbed string written without this key
+    // redacts PII outright, so installing it late would silently produce a
+    // window of uncorrelatable spans rather than an error.
+    if let Some(key) = &env.pii_hash_key {
+        crate::pii::set_pii_hash_key(key.as_bytes());
+    }
+
     let service_name = env
         .service_name
         .clone()
