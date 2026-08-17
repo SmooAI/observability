@@ -145,6 +145,45 @@ impl OtelSdkHandle {
             .as_ref()
             .map(OpenTelemetryTracingBridge::new)
     }
+
+    /// The tracing→OTel-**span** bridge layer, or `None` when traces are
+    /// disabled (no traces endpoint configured). Requires feature
+    /// `tracing-bridge`.
+    ///
+    /// [`Self::tracing_appender_layer`] handles tracing EVENTS (→ OTLP logs).
+    /// This handles tracing SPANS (→ OTLP spans), and without it they do not
+    /// export at all — which is subtler than it sounds, because
+    /// `bootstrap()` sets the global tracer provider either way. Code that opens
+    /// spans through the OpenTelemetry API exports fine; code that uses
+    /// `#[instrument]` or `info_span!` — most Rust code, and most libraries —
+    /// silently does not.
+    ///
+    /// That gap cost a production LLM-tracing outage (th-eaccd1): the per-turn
+    /// `gen_ai.chat` span, carrying model and token usage, was a `tracing` span
+    /// in a subscriber with no bridge. It was printed to stdout for months while
+    /// every dashboard reported the service as instrumented.
+    ///
+    /// ```ignore
+    /// use tracing_subscriber::prelude::*;
+    /// let obs = smooai_observability::bootstrap().await;
+    /// let mut reg = tracing_subscriber::registry().with(EnvFilter::from_default_env());
+    /// if let Some(spans) = obs.otel.as_ref().and_then(|h| h.tracing_span_layer()) {
+    ///     reg.with(spans).init();   // tracing spans now EXPORT
+    /// }
+    /// ```
+    ///
+    /// Bound to this handle's provider rather than the global one, so it exports
+    /// through the same pipeline this SDK flushes and shuts down.
+    #[cfg(feature = "tracing-bridge")]
+    pub fn tracing_span_layer<S>(&self) -> Option<impl tracing_subscriber::Layer<S>>
+    where
+        S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a>,
+    {
+        use opentelemetry::trace::TracerProvider as _;
+        self.tracer_provider.as_ref().map(|tp| {
+            tracing_opentelemetry::layer().with_tracer(tp.tracer("smooai-observability/tracing"))
+        })
+    }
 }
 
 static INSTALLED: OnceCell<OtelSdkHandle> = OnceCell::new();
