@@ -93,11 +93,23 @@ reqwest-middleware = { version = "0.5", optional = true }
 # spans (tower/gen_ai/reqwest, all OTel-native) is correlated automatically. The
 # host installs the layer via `OtelSdkHandle::tracing_appender_layer()`.
 opentelemetry-appender-tracing = "0.32"
+# Feature `tracing-bridge`: the SPAN half of the tracing↔OTel story. The appender
+# above turns tracing EVENTS into OTLP logs; this turns tracing SPANS into OTLP
+# spans. Without it, `#[instrument]` / `info_span!` spans never export even
+# though the global tracer provider is installed (th-eaccd1).
+tracing-opentelemetry = { version = "0.33", optional = true }
+tracing-subscriber = { version = "0.3", features = ["registry", "std"], optional = true }
+tracing = { version = "0.1", optional = true }
 
 [features]
 default = []
 # OTel server-span layer for Tower/Axum services.
 tower = ["dep:tower-layer", "dep:tower-service", "dep:pin-project-lite"]
+# Install a `tracing` -> OTel bridge so `#[instrument]` / `info_span!` spans
+# actually export. Without it, bootstrap() sets the global tracer provider but
+# `tracing` spans go to whatever subscriber the host installed — usually one
+# with no OTel layer, so they are printed and never exported (th-eaccd1).
+tracing-bridge = ["dep:tracing-opentelemetry", "dep:tracing-subscriber", "dep:tracing"]
 # OTel client-span middleware for reqwest. Pulls reqwest as a DIRECT dep (the
 # only thing in this crate that needs it directly — the OTLP transport is on
 # smooai-fetch as of SMOODEV-2029).
