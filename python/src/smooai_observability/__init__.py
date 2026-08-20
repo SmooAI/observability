@@ -34,7 +34,23 @@ from .gen_ai_attributes import (
     record_gen_ai_message,
     set_gen_ai_attributes,
 )
+from .sampling import (
+    CanonicalLevel,
+    LogSamplingInput,
+    fnv1a32,
+    meets_minimum_level,
+    normalize_level,
+    parse_level,
+    sample_decision,
+    should_emit_log,
+)
 from .scope import Scope, get_current_scope, run_with_scope, with_scope
+from .telemetry_settings import (
+    DEFAULT_TELEMETRY_SETTINGS,
+    TelemetrySettings,
+    resolve_telemetry_settings,
+)
+from .traceparent import TraceContext, format_traceparent, parse_traceparent
 from .types import (
     Breadcrumb,
     ExceptionInfo,
@@ -106,6 +122,23 @@ __all__ = [
     "GenAIAttributes",
     "set_gen_ai_attributes",
     "record_gen_ai_message",
+    # ADR-097: session-scoped sampling, config-served telemetry settings, and
+    # W3C traceparent. Parity across the five SDKs is enforced by
+    # `parity/sampling-corpus.json` — see `parity/README.md`.
+    "CanonicalLevel",
+    "LogSamplingInput",
+    "fnv1a32",
+    "meets_minimum_level",
+    "normalize_level",
+    "parse_level",
+    "sample_decision",
+    "should_emit_log",
+    "DEFAULT_TELEMETRY_SETTINGS",
+    "TelemetrySettings",
+    "resolve_telemetry_settings",
+    "TraceContext",
+    "format_traceparent",
+    "parse_traceparent",
     # types
     "ObservabilityEvent",
     "ExceptionInfo",
