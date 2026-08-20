@@ -1,0 +1,9 @@
+go 1.25.0
+
+use (
+	.
+	./fiber
+	./gin
+)
+
+replace github.com/SmooAI/observability/go v0.19.2 => .

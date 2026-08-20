@@ -3,7 +3,7 @@ module github.com/SmooAI/observability/go/fiber
 go 1.25.0
 
 require (
-	github.com/SmooAI/observability/go v0.0.0
+	github.com/SmooAI/observability/go v0.19.2
 	github.com/gofiber/fiber/v2 v2.52.5
 )
 
@@ -47,5 +47,3 @@ require (
 	google.golang.org/grpc v1.81.1 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 )
-
-replace github.com/SmooAI/observability/go => ../
