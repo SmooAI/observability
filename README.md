@@ -55,7 +55,7 @@ Every SDK ships the same core: `captureException` (+ each runtime's global crash
 | GenAI `gen_ai.*` helpers                        | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
 | HTTP middleware                                 | Hono         | FastAPI / Starlette            | tower · reqwest     | net/http · Fiber · Gin | ASP.NET Core        |
 | LLM client instrumentation                      | `wrapOpenAI` | LangChain / LangGraph callback | —                   | —                      | —                   |
-| Log/session sampling (FNV-1a parity corpus)     | ✅           | —                              | —                   | —                      | —                   |
+| Log/session sampling (FNV-1a parity corpus)     | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
 | Source-map upload                               | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
 | React / Next.js bindings                        | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
 | Browser: beacon flush + IndexedDB offline queue | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
@@ -223,7 +223,19 @@ Known divergences: TypeScript, Python, Go and .NET emit `gen_ai.tool.names` as a
 
 ### 📐 Cross-language parity, honestly
 
-[`parity/sampling-corpus.json`](parity/README.md) pins **170 vectors** for the FNV-1a session sampler, level normalization, W3C traceparent parse/format, and settings resolution. Today that corpus is **asserted only by the TypeScript SDK's CI lane** ([`packages/core/src/__tests__/parity-corpus.test.ts`](packages/core/src/__tests__/parity-corpus.test.ts)) — the sampler it governs isn't implemented in the other four languages yet, so their lanes don't consume it. The PII scrub behavior, by contrast, IS implemented in all five SDKs, verified by each language's own test suite against hand-copied vectors rather than a shared file. Wiring every lane to the shared corpus is tracked work; until then, this table — not the corpus — is the parity claim.
+[`parity/sampling-corpus.json`](parity/README.md) pins **170 vectors** for the FNV-1a session sampler, level normalization, W3C traceparent parse/format, and settings resolution. All five SDKs implement it and all five CI lanes load **that same file** — a language that cannot reproduce a vector fails its build:
+
+| SDK            | Loader                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------- |
+| **TypeScript** | [`packages/core/src/__tests__/parity-corpus.test.ts`](packages/core/src/__tests__/parity-corpus.test.ts) |
+| **Rust**       | [`rust/observability/tests/parity_corpus.rs`](rust/observability/tests/parity_corpus.rs)                 |
+| **Python**     | [`python/tests/test_parity_corpus.py`](python/tests/test_parity_corpus.py)                               |
+| **Go**         | [`go/parity_corpus_test.go`](go/parity_corpus_test.go)                                                   |
+| **.NET**       | [`dotnet/tests/.../ParityCorpusTests.cs`](dotnet/tests/SmooAI.Observability.Tests/ParityCorpusTests.cs)  |
+
+`parity/**` is a path-filter trigger for every language lane, so touching the corpus re-runs all five.
+
+The PII scrub behavior is likewise implemented in all five SDKs, but its vectors are still **hand-copied literals** in each language's own test file rather than a shared corpus — that is the remaining gap, and nothing detects a divergence in the _set_ of vectors.
 
 ## 📖 Architecture
 
@@ -262,7 +274,7 @@ Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Ar
 | [`go/`](go)                      | **Go** SDK — capture, OTel, GenAI, net/http + [Fiber](go/fiber) + [Gin](go/gin) middleware                               | go test lane                                                              |
 | [`dotnet/`](dotnet)              | **.NET** SDK (`SmooAI.Observability`) — capture, OTel, GenAI, ASP.NET Core middleware                                    | dotnet test lane                                                          |
 | [`desktop/`](desktop)            | **Observability Studio** — Dioxus desktop client                                                                         | [`build-desktop.yml`](.github/workflows/build-desktop.yml) (3-OS bundles) |
-| [`parity/`](parity)              | Shared sampling/traceparent/settings corpus (see [above](#-cross-language-parity-honestly))                              | consumed by the TS lane                                                   |
+| [`parity/`](parity)              | Shared sampling/traceparent/settings corpus (see [above](#-cross-language-parity-honestly))                              | loaded by all five language lanes                                         |
 
 Every language runs typecheck/lint/format/test in its own [`pr-checks.yml`](.github/workflows/pr-checks.yml) lane on every PR that touches it.
 

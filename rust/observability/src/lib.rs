@@ -39,8 +39,11 @@ pub mod metrics;
 pub mod otel;
 pub mod otel_capture;
 pub mod pii;
+pub mod sampling;
 pub mod scope;
 mod stack;
+pub mod telemetry_settings;
+pub mod traceparent;
 pub mod transport;
 pub mod types;
 
@@ -69,7 +72,16 @@ pub use gen_ai::{
 pub use metrics::{metrics_client, metrics_client_default, MetricsClient};
 pub use otel::{setup_otel_sdk, OtelSdkHandle, SetupOtelOptions};
 pub use otel_capture::{install_panic_hook, register_otel_capture};
+// ADR-097: session-scoped sampling, config-served telemetry settings, and W3C
+// traceparent. Parity across the five SDKs is enforced by
+// `parity/sampling-corpus.json` — see `parity/README.md`.
+pub use sampling::{
+    fnv1a32, meets_minimum_level, normalize_level, parse_level, sample_decision, should_emit_log,
+    CanonicalLevel, LogSamplingInput,
+};
 pub use scope::{current_scope, global_scope, with_scope, with_scope_sync, Scope};
+pub use telemetry_settings::{resolve_telemetry_settings, TelemetrySettings};
+pub use traceparent::{format_traceparent, parse_traceparent, TraceContext};
 pub use types::{
     Breadcrumb, ExceptionInfo, IngestPayload, IngestType, Level, ObservabilityEvent, RequestInfo,
     Runtime, SdkInfo, StackFrame, StackTrace, UserContext,

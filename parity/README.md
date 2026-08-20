@@ -4,15 +4,25 @@
 SDKs: TypeScript (`packages/core`, the reference implementation), Rust
 (`rust/`), Python (`python/`), Go (`go/`), .NET (`dotnet/`).
 
-The intent: every language asserts against **this same file** in its own CI
-lane, so a language that cannot reproduce a vector fails its build. **Current
-enforcement: TypeScript only** — `packages/core/src/__tests__/parity-corpus.test.ts`
-consumes the corpus; the sampler it governs is not yet implemented in Python,
-Rust, Go, or .NET, so their lanes do not read this file yet. Wiring those lanes
-is tracked work. This corpus exists because ADR-007/009 documented
-cross-language behaviour that was never implemented in any of them —
-documentation claiming parity is not evidence of parity, and neither is this
-paragraph: only a consuming CI lane is.
+Every language asserts against **this same file** in its own CI lane, so a
+language that cannot reproduce a vector fails its build. This corpus exists
+because ADR-007/009 documented cross-language behaviour that was never
+implemented in any of them — documentation claiming parity is not evidence of
+parity, and neither is this paragraph: only a consuming CI lane is. Here are the
+five, with the implementations they pin:
+
+| SDK        | Loader                                                         | Implementation                                                                 |
+| ---------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| TypeScript | `packages/core/src/__tests__/parity-corpus.test.ts`            | `packages/core/src/{sampling,traceparent,telemetry-settings}.ts`               |
+| Rust       | `rust/observability/tests/parity_corpus.rs`                    | `rust/observability/src/{sampling,traceparent,telemetry_settings}.rs`          |
+| Python     | `python/tests/test_parity_corpus.py`                           | `python/src/smooai_observability/{sampling,traceparent,telemetry_settings}.py` |
+| Go         | `go/parity_corpus_test.go`                                     | `go/{sampling,traceparent,telemetry_settings}.go`                              |
+| .NET       | `dotnet/tests/SmooAI.Observability.Tests/ParityCorpusTests.cs` | `dotnet/src/SmooAI.Observability/{Sampling,Traceparent,TelemetrySettings}.cs`  |
+
+`parity/**` is a path-filter trigger for all five lanes in `pr-checks.yml`, so
+touching this directory re-runs every language. Adding a vector is a five-lane
+event by construction: a new expectation lands red in four languages until each
+one is ported.
 
 Regenerate with:
 
@@ -113,5 +123,11 @@ tier (ADR-075). No secret may ever enter this key set.
 Registering these keys in a consumer's `.smooai-config` schema happens in the
 **monorepo**, not here — this repo only defines the names, the defaults, and the
 coercion rules. The SDK never imports `@smooai/config`; the host app supplies
-values through the injectable `TelemetrySettingsProvider` seam so the SDK stays
-usable in a test or a browser bundle with no network.
+values through an injectable seam so the SDK stays usable in a test or a browser
+bundle with no network. TypeScript's seam is async
+(`TelemetrySettingsProvider` + `loadTelemetrySettings`); the four ports expose
+only the total, synchronous `resolveTelemetrySettings(raw)` half that the corpus
+pins, because each language's config client differs and a host that already has
+one has no use for a second async wrapper. A caller whose config read _failed_
+passes a null/empty payload and gets the compiled-in defaults — the fail-safe
+guarantee lives in `resolve`, not in the wrapper.
