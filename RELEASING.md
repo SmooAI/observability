@@ -23,14 +23,19 @@ Nothing to do by hand.
 `publish.yml` is dormant until a language-prefixed tag is pushed. Pushing to a
 branch publishes nothing.
 
-| tag                  | goes to                                 | secret needed                  |
-| -------------------- | --------------------------------------- | ------------------------------ |
-| `rust-v<semver>`     | crates.io (`smooai-observability`)      | `CARGO_REGISTRY_TOKEN`         |
-| `python-v<semver>`   | PyPI (`smooai-observability`)           | none — OIDC Trusted Publishing |
-| `dotnet-v<semver>`   | NuGet (`SmooAI.Observability`)          | `NUGET_API_KEY`                |
-| `go/v<semver>`       | pkg.go.dev (`…/observability/go`)       | none — the module proxy        |
-| `go/fiber/v<semver>` | pkg.go.dev (`…/observability/go/fiber`) | none                           |
-| `go/gin/v<semver>`   | pkg.go.dev (`…/observability/go/gin`)   | none                           |
+| tag                  | goes to                                 | secret needed                 |
+| -------------------- | --------------------------------------- | ----------------------------- |
+| `rust-v<semver>`     | crates.io (`smooai-observability`)      | `SMOOAI_CARGO_REGISTRY_TOKEN` |
+| `python-v<semver>`   | PyPI (`smooai-observability`)           | `SMOOAI_PYPI_TOKEN`           |
+| `dotnet-v<semver>`   | NuGet (`SmooAI.Observability`)          | `SMOOAI_NUGET_API_KEY`        |
+| `go/v<semver>`       | pkg.go.dev (`…/observability/go`)       | none — the module proxy       |
+| `go/fiber/v<semver>` | pkg.go.dev (`…/observability/go/fiber`) | none                          |
+| `go/gin/v<semver>`   | pkg.go.dev (`…/observability/go/gin`)   | none                          |
+
+All three secrets are **org-level and already present** — nothing to create.
+Each publish job also refuses to start if its credential resolves to the empty
+string, so a missing or invisible secret fails on a bare runner instead of after
+a clean package at the upload step.
 
 Every job depends on a `verify` gate that asserts (a) all version-bearing files
 agree with `packages/core/package.json` and (b) the tag names that same version.

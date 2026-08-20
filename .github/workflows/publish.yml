@@ -11,17 +11,20 @@ name: Publish SDKs
 # this workflow deliberately does NOT touch the TS flow.
 #
 # ─────────────────────────────────────────────────────────────────────────────
-# REQUIRED GITHUB ACTIONS SECRETS (add under repo Settings → Secrets → Actions):
+# SECRETS — these are ORG-level and already exist. Nothing to create.
 #
-#   CARGO_REGISTRY_TOKEN   crates.io API token  (Rust publish)
-#                          https://crates.io/settings/tokens
+#   SMOOAI_CARGO_REGISTRY_TOKEN   crates.io API token   (Rust publish)
+#   SMOOAI_PYPI_TOKEN             PyPI API token        (Python publish)
+#   SMOOAI_NUGET_API_KEY          nuget.org API key     (.NET publish)
 #
-#   NUGET_API_KEY          nuget.org API key    (.NET publish)
-#                          https://www.nuget.org/account/apikeys
-#
-#   PYPI_API_TOKEN         PyPI API token       (Python publish — ONLY needed if
-#                          NOT using PyPI Trusted Publishing / OIDC; see the
-#                          python job notes below)
+# These names are not cosmetic. This workflow previously read
+# `secrets.CARGO_REGISTRY_TOKEN`, `secrets.NUGET_API_KEY` and
+# `secrets.PYPI_API_TOKEN` — none of which exist for this repo, at either the
+# org or the repo level. A missing secret is the empty string in an expression,
+# so every publish job would have run its full test suite, packaged cleanly, and
+# then failed at the upload with an auth error, or worse pushed an unauthorized
+# request. The names above are the ones `gh api .../actions/organization-secrets`
+# actually reports, and match what SmooAI/logger uses to publish today.
 #
 # Go needs NO secret: pkg.go.dev pulls modules from the Go module proxy
 # automatically once a SemVer git tag exists.
@@ -159,6 +162,20 @@ jobs:
               with:
                   workspaces: rust -> target
 
+            # Fail on a missing credential BEFORE the suite runs, not after a
+            # clean package at the upload step. A missing secret is the empty
+            # string in a GitHub expression — silent until it isn't.
+            - name: Require the crates.io credential
+              if: ${{ !inputs.dry_run }}
+              env:
+                  TOKEN: ${{ secrets.SMOOAI_CARGO_REGISTRY_TOKEN }}
+              run: |
+                  if [ -z "$TOKEN" ]; then
+                      echo "::error::crates.io credential is empty — the secret is missing or not visible to this repo. Nothing published."
+                      exit 1
+                  fi
+                  echo "crates.io credential present."
+
             # Gate publish on the same checks the PR lane runs, so a broken SDK
             # can't ship.
             - name: Format check
@@ -184,7 +201,7 @@ jobs:
               if: ${{ !inputs.dry_run }}
               run: cargo publish --locked -p smooai-observability
               env:
-                  CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+                  CARGO_REGISTRY_TOKEN: ${{ secrets.SMOOAI_CARGO_REGISTRY_TOKEN }}
 
     # ── Python → PyPI ────────────────────────────────────────────────────────
     python:
@@ -194,17 +211,13 @@ jobs:
             (github.event_name == 'workflow_dispatch' && inputs.language == 'python')
         runs-on: ubuntu-latest
         timeout-minutes: 20
-        # PyPI Trusted Publishing (OIDC) — no PYPI_API_TOKEN needed once the
-        # publisher is configured at https://pypi.org/manage/account/publishing/
-        # for this repo + workflow (publish.yml) + environment (pypi). If you
-        # would rather use a classic token, delete the `environment:` block,
-        # remove `id-token: write`, and set `password: ${{ secrets.PYPI_API_TOKEN }}`
-        # on the publish step below.
-        environment:
-            name: pypi
-            url: https://pypi.org/p/smooai-observability
-        permissions:
-            id-token: write # OIDC token for Trusted Publishing
+        # Token auth, not OIDC Trusted Publishing. The OIDC path this job used
+        # to declare needed three things that are not true here: a `pypi`
+        # environment (this repo has ZERO environments configured), a Trusted
+        # Publisher registered on PyPI for repo+workflow+environment, and — for
+        # a package that does not exist yet — a PENDING publisher created by
+        # hand first. `SMOOAI_PYPI_TOKEN` already exists at the org level and is
+        # how SmooAI/logger publishes smooai-logger today.
         defaults:
             run:
                 working-directory: python
@@ -215,6 +228,20 @@ jobs:
               uses: astral-sh/setup-uv@v5
               with:
                   enable-cache: true
+
+            # Fail on a missing credential BEFORE the suite runs, not after a
+            # clean package at the upload step. A missing secret is the empty
+            # string in a GitHub expression — silent until it isn't.
+            - name: Require the PyPI credential
+              if: ${{ !inputs.dry_run }}
+              env:
+                  TOKEN: ${{ secrets.SMOOAI_PYPI_TOKEN }}
+              run: |
+                  if [ -z "$TOKEN" ]; then
+                      echo "::error::PyPI credential is empty — the secret is missing or not visible to this repo. Nothing published."
+                      exit 1
+                  fi
+                  echo "PyPI credential present."
 
             - name: Set up Python
               run: uv python install 3.13
@@ -235,13 +262,11 @@ jobs:
             - name: Build sdist + wheel
               run: uv build --wheel --sdist
 
-            - name: Publish to PyPI (Trusted Publishing)
+            - name: Publish to PyPI
               if: ${{ !inputs.dry_run }}
-              uses: pypa/gh-action-pypi-publish@release/v1
-              with:
-                  packages-dir: python/dist
-                  # If using a classic token instead of OIDC, uncomment:
-                  # password: ${{ secrets.PYPI_API_TOKEN }}
+              run: uv publish
+              env:
+                  UV_PUBLISH_TOKEN: ${{ secrets.SMOOAI_PYPI_TOKEN }}
 
     # ── .NET → NuGet ─────────────────────────────────────────────────────────
     dotnet:
@@ -261,6 +286,20 @@ jobs:
               uses: actions/setup-dotnet@v4
               with:
                   global-json-file: dotnet/global.json
+
+            # Fail on a missing credential BEFORE the suite runs, not after a
+            # clean package at the upload step. A missing secret is the empty
+            # string in a GitHub expression — silent until it isn't.
+            - name: Require the NuGet credential
+              if: ${{ !inputs.dry_run }}
+              env:
+                  TOKEN: ${{ secrets.NUGET_API_KEY || secrets.SMOOAI_NUGET_API_KEY }}
+              run: |
+                  if [ -z "$TOKEN" ]; then
+                      echo "::error::NuGet credential is empty — the secret is missing or not visible to this repo. Nothing published."
+                      exit 1
+                  fi
+                  echo "NuGet credential present."
 
             - name: Restore
               run: dotnet restore
@@ -285,7 +324,10 @@ jobs:
                     --source https://api.nuget.org/v3/index.json \
                     --skip-duplicate
               env:
-                  NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+                  # Repo-level NUGET_API_KEY first (that is where the sibling repos
+                  # keep theirs) with the org secret as the fallback, so this works
+                  # whichever one is present.
+                  NUGET_API_KEY: ${{ secrets.NUGET_API_KEY || secrets.SMOOAI_NUGET_API_KEY }}
 
     # ── Go → pkg.go.dev (no publish step) ────────────────────────────────────
     #
