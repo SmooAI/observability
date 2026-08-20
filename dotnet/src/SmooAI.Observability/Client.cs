@@ -73,7 +73,7 @@ public sealed class ObservabilityClient
     public const string SdkName = "@smooai/observability-dotnet";
 
     /// <summary>SDK version emitted on every event.</summary>
-    public const string SdkVersion = "0.1.0";
+    public const string SdkVersion = "0.19.0";
 
     private ClientOptions? _options;
     private Transport? _transport;

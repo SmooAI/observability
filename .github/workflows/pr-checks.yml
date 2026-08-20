@@ -64,6 +64,32 @@ jobs:
                           - 'desktop/**'
                           - '.github/workflows/pr-checks.yml'
 
+    # Version-drift gate — deliberately NOT gated on `changes`.
+    #
+    # Five SDKs ship one version number, sourced from packages/core/package.json
+    # (the org's convention: @smooai/fetch is 3.4.1 on npm, crates.io AND PyPI).
+    # This asserts every version-bearing file agrees, and FAILS on mismatch
+    # rather than warning.
+    #
+    # It runs on every PR because drift is introduced by editing any one of
+    # eleven files across five languages, and a path filter would let exactly
+    # the interesting case through: a PR that touches only Go, in a repo where
+    # the version came from a TypeScript manifest.
+    versions:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            # No dependencies needed — the script is stdlib-only on purpose, so
+            # this lane stays a few seconds and cannot be broken by an install.
+            - name: Check version sync
+              run: node scripts/sync-versions.mjs --check
+
     # TypeScript lane — unchanged behaviour, now gated on TS-relevant changes.
     validate:
         needs: changes
