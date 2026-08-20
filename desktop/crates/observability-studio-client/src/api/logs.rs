@@ -39,8 +39,14 @@ impl<'a> OrgClient<'a> {
         }
         let start_s = start.to_rfc3339();
         let end_s = end.to_rfc3339();
-        self.get("logs/stats", Some(&Q { start: &start_s, end: &end_s }))
-            .await
+        self.get(
+            "logs/stats",
+            Some(&Q {
+                start: &start_s,
+                end: &end_s,
+            }),
+        )
+        .await
     }
 }
 
@@ -229,14 +235,27 @@ mod tests {
         let stats = LogStats {
             total_logs: 100,
             logs_by_level: vec![
-                LevelCount { level: "INFO".into(), count: 90 },
-                LevelCount { level: "ERROR".into(), count: 8 },
-                LevelCount { level: "FATAL".into(), count: 2 },
+                LevelCount {
+                    level: "INFO".into(),
+                    count: 90,
+                },
+                LevelCount {
+                    level: "ERROR".into(),
+                    count: 8,
+                },
+                LevelCount {
+                    level: "FATAL".into(),
+                    count: 2,
+                },
             ],
             error_rate_time_series: vec![],
             top_log_groups: vec![],
             top_errors: vec![],
-            duration_percentiles: Percentiles { p50: 12.0, p95: 60.0, p99: 110.0 },
+            duration_percentiles: Percentiles {
+                p50: 12.0,
+                p95: 60.0,
+                p99: 110.0,
+            },
         };
         assert_eq!(stats.errors_total(), 10);
         assert!((stats.error_rate_pct() - 10.0).abs() < f64::EPSILON);

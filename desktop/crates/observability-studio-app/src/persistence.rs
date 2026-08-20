@@ -36,11 +36,19 @@ impl OrgRegistry {
             None => return Self::default(),
         };
         if !path.exists() {
-            return Self { entries: vec![], path: Some(path) };
+            return Self {
+                entries: vec![],
+                path: Some(path),
+            };
         }
         let raw = match std::fs::read_to_string(&path) {
             Ok(s) => s,
-            Err(_) => return Self { entries: vec![], path: Some(path) },
+            Err(_) => {
+                return Self {
+                    entries: vec![],
+                    path: Some(path),
+                }
+            }
         };
         let mut me: Self = serde_json::from_str(&raw).unwrap_or_default();
         me.path = Some(path);
@@ -58,9 +66,7 @@ impl OrgRegistry {
     }
 
     pub fn upsert(&mut self, entry: OrgEntry) {
-        if let Some(existing) =
-            self.entries.iter_mut().find(|e| e.org_id == entry.org_id)
-        {
+        if let Some(existing) = self.entries.iter_mut().find(|e| e.org_id == entry.org_id) {
             *existing = entry;
         } else {
             self.entries.push(entry);

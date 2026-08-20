@@ -91,7 +91,10 @@ fn OrgRow(props: OrgRowProps) -> Element {
     let entry = props.entry.clone();
     let id_full = entry.org_id.to_string();
     let id_short = format!("{}…{}", &id_full[..8], &id_full[id_full.len() - 4..]);
-    let cid_short = format!("{}…", entry.client_id_preview.chars().take(8).collect::<String>());
+    let cid_short = format!(
+        "{}…",
+        entry.client_id_preview.chars().take(8).collect::<String>()
+    );
 
     // Pull the ApiState from context inside the component so the Props can stay
     // `PartialEq`-clean (Arc<ApiState> isn't PartialEq).
@@ -155,7 +158,11 @@ fn AddOrgForm(props: AddOrgFormProps) -> Element {
         let org_id_v = org_id().trim().to_string();
         let base_url_v = {
             let t = base_url().trim().to_string();
-            if t.is_empty() { "https://api.smoo.ai".to_string() } else { t }
+            if t.is_empty() {
+                "https://api.smoo.ai".to_string()
+            } else {
+                t
+            }
         };
         let client_id_v = client_id().trim().to_string();
         let client_secret_v = client_secret().trim().to_string();
@@ -187,21 +194,13 @@ fn AddOrgForm(props: AddOrgFormProps) -> Element {
         spawn(async move {
             // Verify the candidate creds against /token before touching the
             // keychain — a typo here shouldn't leave bad creds behind.
-            let verify =
-                api_state.auth.verify(&client_id_v, &client_secret_v).await;
-            match verify {
-                Err(e) => {
-                    error_msg.set(Some(render_auth_error(e)));
-                    busy.set(false);
-                    return;
-                }
-                Ok(_) => {}
+            let verify = api_state.auth.verify(&client_id_v, &client_secret_v).await;
+            if let Err(e) = verify {
+                error_msg.set(Some(render_auth_error(e)));
+                busy.set(false);
+                return;
             }
-            if let Err(e) = auth::store_credentials(
-                org_uuid,
-                &client_id_v,
-                &client_secret_v,
-            ) {
+            if let Err(e) = auth::store_credentials(org_uuid, &client_id_v, &client_secret_v) {
                 error_msg.set(Some(format!("Keychain write failed: {e}")));
                 busy.set(false);
                 return;
@@ -300,7 +299,11 @@ struct FieldProps {
 
 #[component]
 fn Field(props: FieldProps) -> Element {
-    let class = if props.full { "field field--full" } else { "field" };
+    let class = if props.full {
+        "field field--full"
+    } else {
+        "field"
+    };
     let input_class = if props.mono {
         "field__input field__input--mono"
     } else {

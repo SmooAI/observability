@@ -87,9 +87,8 @@ pub fn CommandPalette() -> Element {
 
     // Snapshot the dispatch target up front so the keyboard handler can fire
     // it without borrowing `filtered` (Element renderers can't capture borrows).
-    let enter_action: Option<PaletteAction> = filtered
-        .get(selected_idx())
-        .map(|(_, c)| c.action.clone());
+    let enter_action: Option<PaletteAction> =
+        filtered.get(selected_idx()).map(|(_, c)| c.action.clone());
 
     rsx! {
         div {
@@ -179,7 +178,11 @@ fn build_commands(orgs: &[crate::persistence::OrgEntry]) -> Vec<Command> {
     let mut out: Vec<Command> = Vec::with_capacity(8 + orgs.len());
 
     // Source: Local
-    out.push(make("Source · Local", "switch to local logs", PaletteAction::SelectLocal));
+    out.push(make(
+        "Source · Local",
+        "switch to local logs",
+        PaletteAction::SelectLocal,
+    ));
     // Source: one per org
     for o in orgs {
         let label = format!("Source · {}", o.label);
@@ -192,10 +195,26 @@ fn build_commands(orgs: &[crate::persistence::OrgEntry]) -> Vec<Command> {
         });
     }
     // Views
-    out.push(make("View · Logs", "show the Logs explorer", PaletteAction::SwitchView(RemoteView::Logs)));
-    out.push(make("View · Errors", "show the Errors list", PaletteAction::SwitchView(RemoteView::Errors)));
-    out.push(make("View · Metrics", "show Metrics + heatmap", PaletteAction::SwitchView(RemoteView::Metrics)));
-    out.push(make("Settings", "manage connected orgs", PaletteAction::OpenSettings));
+    out.push(make(
+        "View · Logs",
+        "show the Logs explorer",
+        PaletteAction::SwitchView(RemoteView::Logs),
+    ));
+    out.push(make(
+        "View · Errors",
+        "show the Errors list",
+        PaletteAction::SwitchView(RemoteView::Errors),
+    ));
+    out.push(make(
+        "View · Metrics",
+        "show Metrics + heatmap",
+        PaletteAction::SwitchView(RemoteView::Metrics),
+    ));
+    out.push(make(
+        "Settings",
+        "manage connected orgs",
+        PaletteAction::OpenSettings,
+    ));
     out
 }
 
@@ -247,7 +266,10 @@ mod tests {
     #[test]
     fn haystack_is_lowercase_for_fuzzy_filter() {
         let cmds = build_commands(&[fake_org("Smoo Prod")]);
-        let prod = cmds.iter().find(|c| c.label.ends_with("Smoo Prod")).unwrap();
+        let prod = cmds
+            .iter()
+            .find(|c| c.label.ends_with("Smoo Prod"))
+            .unwrap();
         assert!(prod.haystack.contains("smoo prod"));
         assert!(!prod.haystack.chars().any(|c| c.is_ascii_uppercase()));
     }

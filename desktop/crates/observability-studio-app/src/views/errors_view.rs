@@ -14,8 +14,8 @@ use std::sync::Arc;
 
 use dioxus::prelude::*;
 use observability_studio_client::api::errors::{
-    extract_first_stacktrace, ErrorDetail, ErrorEvent, ErrorGroup, ErrorListParams,
-    ErrorPage, ErrorPatch, ErrorStatus,
+    extract_first_stacktrace, ErrorDetail, ErrorEvent, ErrorGroup, ErrorListParams, ErrorPage,
+    ErrorPatch, ErrorStatus,
 };
 use observability_studio_client::api::ApiClient;
 use uuid::Uuid;
@@ -61,7 +61,11 @@ pub fn ErrorsView(org_id: Uuid) -> Element {
         let api_state = api_for_list.clone();
         async move {
             let _ = nonce; // dependency only
-            let env_filter = if env.trim().is_empty() { None } else { Some(env.trim().to_string()) };
+            let env_filter = if env.trim().is_empty() {
+                None
+            } else {
+                Some(env.trim().to_string())
+            };
             let params = ErrorListParams {
                 environment: env_filter,
                 status,
@@ -259,7 +263,14 @@ fn render_detail(
         None => rsx! { div { class: "logs__loading", "Loading detail…" } },
         Some(None) => rsx! { div { class: "logs__error", "Could not initialise the API client." } },
         Some(Some(Err(msg))) => rsx! { div { class: "logs__error", "{msg}" } },
-        Some(Some(Ok(detail))) => render_detail_body(detail.clone(), api_state, org_id, group_id, mode, refresh_nonce),
+        Some(Some(Ok(detail))) => render_detail_body(
+            detail.clone(),
+            api_state,
+            org_id,
+            group_id,
+            mode,
+            refresh_nonce,
+        ),
     };
 
     rsx! {
@@ -285,13 +296,23 @@ fn render_detail_body(
     let mutate = move |new_status: ErrorStatus| {
         let api_state = api_state.clone();
         spawn(async move {
-            let Some(api) = make_client(&api_state) else { return };
-            let patch = ErrorPatch { status: Some(new_status), assigned_user_id: None };
+            let Some(api) = make_client(&api_state) else {
+                return;
+            };
+            let patch = ErrorPatch {
+                status: Some(new_status),
+                assigned_user_id: None,
+            };
             // Best-effort — re-fetch the list on success so the rail badge
             // updates. We don't surface errors inline today; that's a
             // follow-up. For now we tick the refresh nonce so the next time
             // the user pops back to the list, they see fresh data.
-            if api.org(org_id).update_error_group(group_id, &patch).await.is_ok() {
+            if api
+                .org(org_id)
+                .update_error_group(group_id, &patch)
+                .await
+                .is_ok()
+            {
                 refresh_nonce.with_mut(|n| *n += 1);
             }
         });
@@ -417,7 +438,10 @@ fn status_badge(status: ErrorStatus) -> Element {
 
 fn short_ts(iso: &str) -> String {
     let no_t = iso.replacen('T', " ", 1);
-    let no_frac = no_t.split_once('.').map(|(a, _)| a.to_string()).unwrap_or(no_t);
+    let no_frac = no_t
+        .split_once('.')
+        .map(|(a, _)| a.to_string())
+        .unwrap_or(no_t);
     no_frac.trim_end_matches('Z').to_string()
 }
 

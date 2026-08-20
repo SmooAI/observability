@@ -182,7 +182,8 @@ mod tests {
         // Mean
         let mean: TimeseriesPayload = serde_json::from_value(json!({
             "points": [{"bucket_ms": 1, "group_key": "g", "value": 1.0, "count": 1}]
-        })).unwrap();
+        }))
+        .unwrap();
         assert!(matches!(mean, TimeseriesPayload::Mean { .. }));
 
         // Percentiles (presence of p50/p95/p99 distinguishes)

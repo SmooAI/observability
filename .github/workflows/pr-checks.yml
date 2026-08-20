@@ -22,6 +22,7 @@ jobs:
             go: ${{ steps.filter.outputs.go }}
             python: ${{ steps.filter.outputs.python }}
             dotnet: ${{ steps.filter.outputs.dotnet }}
+            desktop: ${{ steps.filter.outputs.desktop }}
         steps:
             - uses: actions/checkout@v4
 
@@ -54,6 +55,13 @@ jobs:
                       dotnet:
                           - 'parity/**'
                           - 'dotnet/**'
+                          - '.github/workflows/pr-checks.yml'
+                      # `desktop/` is its own cargo workspace, NOT a member of
+                      # `rust/`, so the rust lane never compiled it. It has no
+                      # `parity/**` trigger because the studio is a client of
+                      # the ingest API, not an SDK bound by the corpus.
+                      desktop:
+                          - 'desktop/**'
                           - '.github/workflows/pr-checks.yml'
 
     # TypeScript lane — unchanged behaviour, now gated on TS-relevant changes.
@@ -230,3 +238,60 @@ jobs:
 
             - name: Format verify
               run: dotnet format --verify-no-changes
+
+    # Desktop lane — fmt, clippy (warnings as errors), tests. Separate cargo
+    # workspace in desktop/.
+    #
+    # Until this existed, the flagship 4.4k-LOC Dioxus studio was NEVER compiled
+    # on a PR: `build-desktop.yml` only fires on a `studio-v*` tag, a manual
+    # dispatch, or a push to main, so a broken desktop change landed on main and
+    # was discovered at release time. This lane compiles it before the merge, not
+    # after.
+    #
+    # `cargo check` rather than a full bundle: the three-OS bundling in
+    # `build-desktop.yml` is the release artifact and takes ~20 min a platform.
+    # What a PR needs to know is "does it compile, lint and test", which is one
+    # Linux runner.
+    desktop:
+        needs: changes
+        if: needs.changes.outputs.desktop == 'true'
+        runs-on: ubuntu-latest
+        timeout-minutes: 30
+        defaults:
+            run:
+                working-directory: desktop
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Install Rust toolchain
+              uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: rustfmt, clippy
+
+            - name: Cache cargo
+              uses: Swatinem/rust-cache@v2
+              with:
+                  workspaces: desktop -> target
+
+            # Dioxus desktop uses wry / WebKitGTK on Linux. Same package set as
+            # build-desktop.yml's Linux leg — keep the two in sync, or this lane
+            # goes green on a build the release workflow cannot reproduce.
+            - name: Install Linux deps
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y \
+                      libwebkit2gtk-4.1-dev \
+                      libgtk-3-dev \
+                      libsoup-3.0-dev \
+                      libjavascriptcoregtk-4.1-dev \
+                      libxdo-dev \
+                      libayatana-appindicator3-dev
+
+            - name: Format check
+              run: cargo fmt --all --check
+
+            - name: Clippy
+              run: cargo clippy --workspace --all-targets -- -D warnings
+
+            - name: Test
+              run: cargo test --workspace

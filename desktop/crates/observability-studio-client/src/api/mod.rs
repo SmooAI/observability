@@ -24,7 +24,10 @@ pub enum ApiError {
     #[error("url: {0}")]
     Url(#[from] url::ParseError),
     #[error("api returned {status}: {body}")]
-    Status { status: reqwest::StatusCode, body: String },
+    Status {
+        status: reqwest::StatusCode,
+        body: String,
+    },
 }
 
 #[derive(Clone)]
@@ -49,7 +52,10 @@ impl ApiClient {
     }
 
     pub fn org(&self, org_id: Uuid) -> OrgClient<'_> {
-        OrgClient { client: self, org_id }
+        OrgClient {
+            client: self,
+            org_id,
+        }
     }
 }
 
@@ -60,10 +66,10 @@ pub struct OrgClient<'a> {
 
 impl<'a> OrgClient<'a> {
     pub(crate) fn endpoint(&self, path: &str) -> Result<Url, ApiError> {
-        let base = self
-            .client
-            .base
-            .join(&format!("/organizations/{org}/observability/", org = self.org_id))?;
+        let base = self.client.base.join(&format!(
+            "/organizations/{org}/observability/",
+            org = self.org_id
+        ))?;
         Ok(base.join(path.trim_start_matches('/'))?)
     }
 
@@ -72,7 +78,8 @@ impl<'a> OrgClient<'a> {
         R: DeserializeOwned,
         Q: Serialize + ?Sized,
     {
-        self.send(reqwest::Method::GET, path, query, Option::<&()>::None).await
+        self.send(reqwest::Method::GET, path, query, Option::<&()>::None)
+            .await
     }
 
     pub async fn post<R, B>(&self, path: &str, body: &B) -> Result<R, ApiError>
@@ -80,7 +87,8 @@ impl<'a> OrgClient<'a> {
         R: DeserializeOwned,
         B: Serialize + ?Sized,
     {
-        self.send(reqwest::Method::POST, path, Option::<&()>::None, Some(body)).await
+        self.send(reqwest::Method::POST, path, Option::<&()>::None, Some(body))
+            .await
     }
 
     pub async fn patch<R, B>(&self, path: &str, body: &B) -> Result<R, ApiError>
@@ -88,7 +96,13 @@ impl<'a> OrgClient<'a> {
         R: DeserializeOwned,
         B: Serialize + ?Sized,
     {
-        self.send(reqwest::Method::PATCH, path, Option::<&()>::None, Some(body)).await
+        self.send(
+            reqwest::Method::PATCH,
+            path,
+            Option::<&()>::None,
+            Some(body),
+        )
+        .await
     }
 
     async fn send<R, Q, B>(
@@ -148,10 +162,13 @@ mod tests {
 
     #[test]
     fn endpoint_composition_includes_org_and_path() {
-        let api = ApiClient::new(reqwest::Client::new(), AuthManager::new(reqwest::Client::new()))
-            .unwrap()
-            .with_base("https://api.example.test")
-            .unwrap();
+        let api = ApiClient::new(
+            reqwest::Client::new(),
+            AuthManager::new(reqwest::Client::new()),
+        )
+        .unwrap()
+        .with_base("https://api.example.test")
+        .unwrap();
         let org = Uuid::nil();
         let url = api.org(org).endpoint("logs/query").unwrap();
         assert_eq!(
