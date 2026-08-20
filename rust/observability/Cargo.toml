@@ -1,6 +1,6 @@
 [package]
 name = "smooai-observability"
-version = "0.19.0"
+version = "0.19.2"
 edition = "2021"
 description = "SmooAI Observability SDK for Rust — error capture, PII scrubbing, batched webhook transport, OTLP traces + metrics, GenAI semconv, and M2M auth. Lets downstream Rust services (api-prime, voice, temporal-worker) self-emit telemetry to api.smoo.ai."
 repository = "https://github.com/SmooAI/observability"

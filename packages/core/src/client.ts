@@ -3,7 +3,7 @@ import { dropSdkFrames, parseStack } from './stack-parser';
 import type { ClientOptions, ExceptionInfo, Level, ObservabilityEvent, Runtime, StackFrame } from './types';
 
 const SDK_NAME = '@smooai/observability';
-const SDK_VERSION = '0.19.0';
+const SDK_VERSION = '0.19.2';
 
 /**
  * Native per-runtime capture handler. When registered, `captureException` /

@@ -62,6 +62,21 @@ jobs:
               with:
                   commit: '🦋 New version release'
                   title: '🦋 New version release'
+                  # WITHOUT this input the action runs `changeset version`
+                  # itself and the package.json `version` SCRIPT never fires —
+                  # npm lifecycle hooks respond to `npm version`, not to
+                  # `changeset version`. That is exactly how #100/#101 bumped
+                  # packages/core to 0.19.2 while the other thirteen
+                  # version-bearing files stayed at 0.19.0 and turned the
+                  # `versions` lane red on main.
+                  #
+                  # `pnpm run version` (not `pnpm version`, which is pnpm's own
+                  # builtin) runs `changeset version && node
+                  # scripts/sync-versions.mjs`. The action commits the working
+                  # tree after this command, so the synced files land in the
+                  # release commit — the whole point of syncing here rather than
+                  # after publish.
+                  version: pnpm run version
                   publish: pnpm ci:publish
                   createGithubReleases: true
               env:

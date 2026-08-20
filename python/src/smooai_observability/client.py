@@ -32,7 +32,7 @@ from .types import (
 )
 
 SDK_NAME = "@smooai/observability"
-SDK_VERSION = "0.19.0"
+SDK_VERSION = "0.19.2"
 RUNTIME: Runtime = "python"
 
 

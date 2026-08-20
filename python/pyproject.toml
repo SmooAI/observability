@@ -1,6 +1,6 @@
 [project]
 name = "smooai-observability"
-version = "0.19.0"
+version = "0.19.2"
 description = "SmooAI Observability SDK — error capture, PII scrubbing, batched webhook transport, OTLP traces + metrics, and GenAI semantic conventions."
 readme = "README.md"
 # Bumped from >=3.10 to >=3.12: the webhook transport now depends on
