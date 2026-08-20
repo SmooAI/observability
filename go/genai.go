@@ -159,12 +159,23 @@ type GenAIMessageExtra struct {
 // RecordGenAIMessage emits a gen_ai.{role}.message span event carrying the
 // content, for the dashboard's prompt/completion side-by-side view. Use
 // sparingly — these are size-heavy. Never panics.
+//
+// Content is PII-scrubbed via ScrubString before it leaves the process —
+// prompts and tool arguments are the single most PII-dense payload this SDK can
+// touch, so raw content never reaches the wire. That covers both classes:
+// credentials (Bearer tokens, api keys, password=) are dropped, and emails /
+// phones / addresses are hashed per-org. Do not scrub inline here; routing
+// through the SDK's one scrub entry point is what makes the hashing free.
+//
+// ponytail: uses the org-less ScrubString, so hashes are salted with the empty
+// org — there is no org id in hand at this call site. Switch to
+// ScrubStringForOrg if one ever reaches here. Matches the TS reference.
 func RecordGenAIMessage(span trace.Span, role GenAIMessageRole, content string, extra *GenAIMessageExtra) {
 	defer recoverSilently()
 	if span == nil {
 		return
 	}
-	attrs := []attribute.KeyValue{attribute.String("gen_ai.message.content", content)}
+	attrs := []attribute.KeyValue{attribute.String("gen_ai.message.content", ScrubString(content))}
 	if extra != nil {
 		if extra.ToolCallID != "" {
 			attrs = append(attrs, attribute.String("gen_ai.tool_call.id", extra.ToolCallID))

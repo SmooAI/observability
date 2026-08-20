@@ -113,6 +113,22 @@ public static class GenAIActivity
     /// so the dashboard's prompt/completion view can render it. Use sparingly —
     /// these are size-heavy. No-op if span is null.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Content is PII-scrubbed via <see cref="Pii.ScrubString"/> before it leaves
+    /// the process — prompts and tool arguments are the single most PII-dense
+    /// payload this SDK can touch, so raw content never reaches the wire. That
+    /// covers both classes: credentials (Bearer tokens, api keys,
+    /// <c>password=</c>) are dropped, and emails / phones / addresses are hashed
+    /// per-org. Do not scrub inline here; routing through the SDK's one scrub
+    /// entry point is what makes the hashing free.
+    /// </para>
+    /// <para>
+    /// ponytail: uses the org-less <c>ScrubString</c>, so hashes are salted with
+    /// the empty org — there is no org id in hand at this call site. Switch to
+    /// <c>ScrubStringForOrg</c> if one ever reaches here. Matches the TS reference.
+    /// </para>
+    /// </remarks>
     public static void RecordMessage(Activity? span, string role, string content, string? toolCallId = null, string? toolName = null)
     {
         if (span is null)
@@ -121,7 +137,7 @@ public static class GenAIActivity
         }
         var tags = new ActivityTagsCollection
         {
-            { "gen_ai.message.content", content },
+            { "gen_ai.message.content", Pii.ScrubString(content) },
         };
         if (toolCallId is not null)
         {

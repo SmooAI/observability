@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -215,3 +216,64 @@ func TestGenAIAttributesSet(t *testing.T) {
 
 var _ = trace.SpanFromContext // keep trace import used if assertions change
 var _ = time.Second
+
+// ---- GenAI cross-SDK divergences, closed --------------------------------
+
+// TestGenAIToolNamesIsAStringArray pins the shape the Rust SDK used to get
+// wrong (it emitted a comma-joined string). A backend filtering by tool cannot
+// do it against a joined string, and a tool name containing a comma silently
+// became two tools.
+func TestGenAIToolNamesIsAStringArray(t *testing.T) {
+	sr := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sr))
+	_, span := tp.Tracer("g").Start(context.Background(), "llm")
+	SetGenAIAttributes(span, GenAIAttributes{ToolNames: []string{"search", "calc"}})
+	span.End()
+
+	for _, kv := range sr.Ended()[0].Attributes() {
+		if kv.Key == "gen_ai.tool.names" {
+			got, ok := kv.Value.AsInterface().([]string)
+			if !ok {
+				t.Fatalf("gen_ai.tool.names is %T, want []string", kv.Value.AsInterface())
+			}
+			if len(got) != 2 || got[0] != "search" || got[1] != "calc" {
+				t.Errorf("gen_ai.tool.names = %v, want [search calc]", got)
+			}
+			return
+		}
+	}
+	t.Fatal("gen_ai.tool.names not set")
+}
+
+// TestGenAIMessageContentIsScrubbed pins that recorded message content goes
+// through the PII scrubber. Prompts and tool arguments are the most PII-dense
+// payload this SDK touches; only the TS SDK used to scrub them.
+func TestGenAIMessageContentIsScrubbed(t *testing.T) {
+	sr := tracetest.NewSpanRecorder()
+	tp := sdktrace.NewTracerProvider(sdktrace.WithSpanProcessor(sr))
+	_, span := tp.Tracer("g").Start(context.Background(), "llm")
+	RecordGenAIMessage(span, GenAIRoleUser, "mail a@b.com, Authorization: Bearer abc.def-ghi", nil)
+	span.End()
+
+	events := sr.Ended()[0].Events()
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	var content string
+	for _, kv := range events[0].Attributes {
+		if kv.Key == "gen_ai.message.content" {
+			content = kv.Value.AsString()
+		}
+	}
+	if strings.Contains(content, "a@b.com") {
+		t.Errorf("raw email survived scrubbing: %q", content)
+	}
+	if !strings.Contains(content, "Bearer [redacted]") {
+		t.Errorf("bearer token not redacted: %q", content)
+	}
+	// No key installed in this test process, so the email is redacted rather
+	// than hashed — the fail-safe, not a missed match.
+	if !strings.Contains(content, "[email:") {
+		t.Errorf("email was not replaced by a token: %q", content)
+	}
+}

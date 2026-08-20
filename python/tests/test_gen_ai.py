@@ -56,3 +56,37 @@ def test_record_gen_ai_message_event():
     assert event.attributes["gen_ai.message.content"] == "hello"
     assert event.attributes["gen_ai.tool.name"] == "search"
     assert event.attributes["gen_ai.tool_call.id"] == "tc1"
+
+
+# ---- GenAI cross-SDK divergences, closed ----------------------------------
+
+
+def test_tool_names_is_a_string_array():
+    """Pins the shape the Rust SDK used to get wrong (comma-joined string).
+
+    A backend filtering by tool cannot do it against a joined string, and a tool
+    name containing a comma silently became two tools.
+    """
+    provider, exporter = _provider()
+    with provider.get_tracer("test").start_as_current_span("llm.call") as span:
+        set_gen_ai_attributes(span, GenAIAttributes(tool_names=["search", "calc"]))
+    attrs = exporter.get_finished_spans()[0].attributes
+    assert tuple(attrs["gen_ai.tool.names"]) == ("search", "calc")
+    assert not isinstance(attrs["gen_ai.tool.names"], str)
+
+
+def test_recorded_message_content_is_scrubbed():
+    """Prompts and tool arguments are the most PII-dense payload this SDK touches.
+
+    Only the TS SDK used to scrub them.
+    """
+    provider, exporter = _provider()
+    with provider.get_tracer("test").start_as_current_span("llm.call") as span:
+        record_gen_ai_message(span, "user", "mail a@b.com, Authorization: Bearer abc.def-ghi")
+    event = exporter.get_finished_spans()[0].events[0]
+    content = event.attributes["gen_ai.message.content"]
+    assert "a@b.com" not in content
+    assert "Bearer [redacted]" in content
+    # No key installed in this test process, so the email is redacted rather
+    # than hashed — the fail-safe, not a missed match.
+    assert "[email:" in content

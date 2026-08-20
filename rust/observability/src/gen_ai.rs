@@ -8,7 +8,7 @@
 //! Spec: <https://opentelemetry.io/docs/specs/semconv/gen-ai/>
 
 use opentelemetry::trace::Span;
-use opentelemetry::KeyValue;
+use opentelemetry::{Array, KeyValue, StringValue, Value};
 
 /// GenAI operation kind. `agent` for top-level agent spans, `chat` for LLM
 /// calls, `tool` for tool invocations.
@@ -142,7 +142,16 @@ pub fn set_gen_ai_attributes<S: Span>(span: &mut S, attrs: &GenAIAttributes) {
     }
     if let Some(names) = &attrs.tool_names {
         if !names.is_empty() {
-            span.set_attribute(KeyValue::new("gen_ai.tool.names", names.join(",")));
+            // A STRING ARRAY, matching the TS/Python/Go/.NET SDKs and the OTel
+            // spec's array-valued attribute. This used to be `names.join(",")`,
+            // which meant a Rust service's spans could not be filtered by tool
+            // the way every other language's could — and a tool name containing
+            // a comma silently became two tools.
+            let values: Vec<StringValue> = names.iter().cloned().map(StringValue::from).collect();
+            span.set_attribute(KeyValue::new(
+                "gen_ai.tool.names",
+                Value::Array(Array::String(values)),
+            ));
         }
     }
     if let Some(v) = attrs.truncated {
@@ -189,13 +198,28 @@ pub struct GenAIMessageExtra {
 /// Emit a `gen_ai.{role}.message` span event so the dashboard's
 /// prompt/completion view can render the actual content. Use sparingly — these
 /// are size-heavy.
+///
+/// Content is PII-scrubbed via [`crate::pii::scrub_string`] before it leaves the
+/// process — prompts and tool arguments are the single most PII-dense payload
+/// this SDK can touch, so raw content never reaches the wire. That covers both
+/// classes: credentials (Bearer tokens, api keys, `password=`) are dropped, and
+/// emails / phones / addresses are hashed per-org. Do not scrub inline here;
+/// routing through the SDK's one scrub entry point is what makes the hashing
+/// free.
+///
+/// ponytail: uses the org-less `scrub_string`, so hashes are salted with the
+/// empty org — there is no org id in hand at this call site. Switch to
+/// `scrub_string_for_org` if one ever reaches here. Matches the TS reference.
 pub fn record_gen_ai_message<S: Span>(
     span: &mut S,
     role: GenAIRole,
     content: impl Into<String>,
     extra: &GenAIMessageExtra,
 ) {
-    let mut kvs = vec![KeyValue::new("gen_ai.message.content", content.into())];
+    let mut kvs = vec![KeyValue::new(
+        "gen_ai.message.content",
+        crate::pii::scrub_string(&content.into()),
+    )];
     if let Some(id) = &extra.tool_call_id {
         kvs.push(KeyValue::new("gen_ai.tool_call.id", id.clone()));
     }
