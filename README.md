@@ -214,12 +214,14 @@ setGenAIAttributes(span, { system: 'anthropic', operationName: 'chat', requestMo
 | SDK            | Attribute helper              | Message events                | Content PII-scrubbed | Framework integration                               |
 | -------------- | ----------------------------- | ----------------------------- | -------------------- | --------------------------------------------------- |
 | **TypeScript** | `setGenAIAttributes`          | `recordGenAIMessage`          | ✅                   | ✅ `wrapOpenAI` — OpenAI Node SDK + compatible APIs |
-| **Rust**       | `set_gen_ai_attributes`       | `record_gen_ai_message`       | ❌                   | —                                                   |
-| **Python**     | `set_gen_ai_attributes`       | `record_gen_ai_message`       | ❌                   | ✅ `SmooAICallbackHandler` — LangChain / LangGraph  |
-| **Go**         | `SetGenAIAttributes`          | `RecordGenAIMessage`          | ❌                   | —                                                   |
-| **.NET**       | `GenAIActivity.SetAttributes` | `GenAIActivity.RecordMessage` | ❌                   | —                                                   |
+| **Rust**       | `set_gen_ai_attributes`       | `record_gen_ai_message`       | ✅                   | —                                                   |
+| **Python**     | `set_gen_ai_attributes`       | `record_gen_ai_message`       | ✅                   | ✅ `SmooAICallbackHandler` — LangChain / LangGraph  |
+| **Go**         | `SetGenAIAttributes`          | `RecordGenAIMessage`          | ✅                   | —                                                   |
+| **.NET**       | `GenAIActivity.SetAttributes` | `GenAIActivity.RecordMessage` | ✅                   | —                                                   |
 
-Known divergences: TypeScript, Python, Go and .NET emit `gen_ai.tool.names` as a **string array**; Rust emits a comma-joined string. Only TypeScript scrubs recorded message content today.
+Known divergences: **none in the attribute or event shape.** All five emit `gen_ai.tool.names` as a **string array** and all five PII-scrub recorded message content. Two divergences that used to be listed here are closed: Rust emitted `gen_ai.tool.names` comma-joined (a tool name containing a comma silently became two tools, and a Rust service's spans could not be filtered by tool), and only TypeScript scrubbed message content (prompts and tool arguments are the most PII-dense payload the SDK touches). Each fix ships with a span-level test in its own language.
+
+What still differs is only the **framework glue** — the `wrapOpenAI` and LangChain columns above — which is a matter of which ecosystems have an integration written, not of the wire contract.
 
 ### 📐 Cross-language parity, honestly
 

@@ -14,6 +14,8 @@ from typing import Literal
 
 from opentelemetry.trace import Span
 
+from .pii import scrub_string
+
 GenAIOperationName = Literal["chat", "text_completion", "embeddings", "tool", "agent", "rerank"]
 
 
@@ -95,8 +97,22 @@ def record_gen_ai_message(
     tool_name: str | None = None,
 ) -> None:
     """Emit a ``gen_ai.{role}.message`` span event with the message content.
-    Use sparingly — these are size-heavy."""
-    attributes: dict[str, object] = {"gen_ai.message.content": content}
+
+    Use sparingly — these are size-heavy.
+
+    Content is PII-scrubbed via :func:`~smooai_observability.pii.scrub_string`
+    before it leaves the process — prompts and tool arguments are the single most
+    PII-dense payload this SDK can touch, so raw content never reaches the wire.
+    That covers both classes: credentials (Bearer tokens, api keys,
+    ``password=``) are dropped, and emails / phones / addresses are hashed
+    per-org. Do not scrub inline here; routing through the SDK's one scrub entry
+    point is what makes the hashing free.
+
+    ponytail: uses the org-less ``scrub_string``, so hashes are salted with the
+    empty org — there is no org id in hand at this call site. Switch to
+    ``scrub_string_for_org`` if one ever reaches here. Matches the TS reference.
+    """
+    attributes: dict[str, object] = {"gen_ai.message.content": scrub_string(content)}
     if tool_call_id is not None:
         attributes["gen_ai.tool_call.id"] = tool_call_id
     if tool_name is not None:
