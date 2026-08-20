@@ -4,10 +4,15 @@
 SDKs: TypeScript (`packages/core`, the reference implementation), Rust
 (`rust/`), Python (`python/`), Go (`go/`), .NET (`dotnet/`).
 
-Every language asserts against **this same file** in its own CI lane. A language
-that cannot reproduce a vector fails its build. This exists because ADR-007/009
-documented cross-language behaviour that was never implemented in any of them —
-documentation claiming parity is not evidence of parity.
+The intent: every language asserts against **this same file** in its own CI
+lane, so a language that cannot reproduce a vector fails its build. **Current
+enforcement: TypeScript only** — `packages/core/src/__tests__/parity-corpus.test.ts`
+consumes the corpus; the sampler it governs is not yet implemented in Python,
+Rust, Go, or .NET, so their lanes do not read this file yet. Wiring those lanes
+is tracked work. This corpus exists because ADR-007/009 documented
+cross-language behaviour that was never implemented in any of them —
+documentation claiming parity is not evidence of parity, and neither is this
+paragraph: only a consuming CI lane is.
 
 Regenerate with:
 

@@ -9,10 +9,13 @@ Tracking: [SMOODEV-1156](https://smooai.atlassian.net/browse/SMOODEV-1156).
 
 ## Install
 
+> **Not yet published to PyPI** — publishing is tag-triggered (`python-v<semver>`
+> in [`publish.yml`](../.github/workflows/publish.yml)) and no tag has shipped
+> yet. Until then, install from source:
+
 ```bash
-pip install smooai-observability            # core: capture + webhook transport
-pip install smooai-observability[otlp]      # + OTLP/HTTP trace & metric export
-pip install smooai-observability[fastapi]   # + FastAPI/Starlette middleware
+pip install "smooai-observability @ git+https://github.com/SmooAI/observability.git#subdirectory=python"
+# extras once published: [otlp] OTLP/HTTP trace & metric export, [fastapi] FastAPI/Starlette middleware
 ```
 
 ## Quick start
