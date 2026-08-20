@@ -196,9 +196,15 @@ jobs:
 
             - name: Test
               run: |
+                  # -count=1 disables the test cache. NOT optional here: the
+                  # parity corpora live in parity/, OUTSIDE these packages,
+                  # and Go's cache does not invalidate on a file it did not
+                  # see as a package input. Verified — corrupting a corpus
+                  # vector and re-running plain `go test ./...` reports
+                  # "ok (cached)" and stays green.
                   for m in . fiber gin; do
                       [ -f "$m/go.mod" ] || continue
-                      echo "::group::go test ($m)"; (cd "$m" && go test ./...); echo "::endgroup::"
+                      echo "::group::go test ($m)"; (cd "$m" && go test -count=1 ./...); echo "::endgroup::"
                   done
 
             # Catch an unpublishable module at review time rather than at

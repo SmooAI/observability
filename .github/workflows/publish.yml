@@ -375,9 +375,15 @@ jobs:
 
             - name: Vet + test every module
               run: |
+                  # -count=1 disables the test cache. NOT optional here: the
+                  # parity corpora live in parity/, OUTSIDE these packages,
+                  # and Go's cache does not invalidate on a file it did not
+                  # see as a package input. Verified — corrupting a corpus
+                  # vector and re-running plain `go test ./...` reports
+                  # "ok (cached)" and stays green.
                   for m in . fiber gin; do
                       echo "::group::go vet + test ($m)"
-                      (cd "$m" && go vet ./... && go test ./...)
+                      (cd "$m" && go vet ./... && go test -count=1 ./...)
                       echo "::endgroup::"
                   done
 
