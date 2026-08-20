@@ -18,7 +18,7 @@ use crate::types::{ExceptionInfo, Level, ObservabilityEvent, Runtime, SdkInfo, S
 use std::sync::Arc;
 
 pub const SDK_NAME: &str = "@smooai/observability";
-pub const SDK_VERSION: &str = "0.19.0";
+pub const SDK_VERSION: &str = "0.19.2";
 
 /// A `before_send` predicate. Return `Some(event)` to send (possibly mutated),
 /// or `None` to drop the event (e.g. known noise). Mirrors the TS

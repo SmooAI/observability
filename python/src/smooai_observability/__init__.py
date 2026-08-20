@@ -63,7 +63,7 @@ from .types import (
     User,
 )
 
-__version__ = "0.19.0"
+__version__ = "0.19.2"
 
 
 # --- module-level convenience API (mirror TS top-level exports) --------------
