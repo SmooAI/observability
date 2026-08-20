@@ -11,45 +11,57 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/TypeScript-strict_ESM-00A6A6?style=flat-square" alt="TypeScript">
   <img src="https://img.shields.io/github/actions/workflow/status/SmooAI/observability/pr-checks.yml?style=flat-square&color=00A6A6&label=CI" alt="CI">
   <img src="https://img.shields.io/npm/dw/@smooai/observability?style=flat-square&color=F49F0A&label=downloads" alt="downloads">
+  <img src="https://img.shields.io/badge/TypeScript_·_Python_·_Rust_·_Go_·_.NET-F49F0A?style=flat-square" alt="TypeScript · Python · Rust · Go · .NET">
+  <img src="https://img.shields.io/badge/one_ingest_contract-FF6B6C?style=flat-square" alt="one ingest contract">
 </p>
 
 <p align="center">
-  <a href="#-features"><b>Features</b></a> &nbsp;·&nbsp; <a href="#-install"><b>Install</b></a> &nbsp;·&nbsp; <a href="#-usage"><b>Usage</b></a> &nbsp;·&nbsp; <a href="#-architecture"><b>Architecture</b></a> &nbsp;·&nbsp; <a href="#-part-of-smoo-ai"><b>Platform</b></a>
+  <a href="#what-is-this"><b>What it is</b></a> &nbsp;·&nbsp; <a href="#-feature-tour"><b>Feature tour</b></a> &nbsp;·&nbsp; <a href="#-install"><b>Install</b></a> &nbsp;·&nbsp; <a href="#-usage"><b>Usage</b></a> &nbsp;·&nbsp; <a href="#-five-sdks-one-contract"><b>SDK status</b></a> &nbsp;·&nbsp; <a href="#-architecture"><b>Architecture</b></a> &nbsp;·&nbsp; <a href="#-observability-studio-desktop"><b>Studio</b></a> &nbsp;·&nbsp; <a href="#-part-of-smoo-ai"><b>Platform</b></a>
 </p>
 
 ---
 
-> The error-tracking platform we wished was already in our stack. You ship a deploy; somewhere out there a webpack chunk is 404'ing for one user and your sign-in page is silently broken. Your error boundary `console.error`s into the void, and your only signal is the support ticket that arrives forty minutes later. `@smooai/observability` fills that gap: automatic capture and grouping across every runtime, your events going to **your** Smoo backend only.
+> The error-tracking platform we wished was already in our stack. You ship a deploy; somewhere out there a webpack chunk is 404'ing for one user and your sign-in page is silently broken. Your error boundary `console.error`s into the void, and your only signal is the support ticket that arrives forty minutes later. `@smooai/observability` fills that gap: automatic capture, breadcrumbs, PII scrubbing, OpenTelemetry traces + metrics, and GenAI telemetry — with SDKs in **five languages** speaking **one ingest contract**, your events going to **your** Smoo backend only. Plus a native **desktop studio** to read it all.
 
-## ✨ Features
+## What is this?
 
-**Browser**
+A monorepo of observability SDKs — **TypeScript** (the reference, on npm), **Python**, **Rust**, **Go**, and **.NET** (complete and CI-tested, in-repo) — plus a native **Dioxus desktop client**. Every SDK captures errors with breadcrumbs and scoped context, scrubs PII before anything leaves the process, exports OpenTelemetry traces and metrics over OTLP with M2M auth, and POSTs error events to the same ingest endpoint (`POST /webhooks/observability/{org_id}/{token}`). The heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the [Smoo platform](https://github.com/SmooAI/smooai).
 
-- 🛑 **Uncaught exceptions** — `window.onerror`, `unhandledrejection`, `console.error` taps
-- 🍞 **Breadcrumbs** — `fetch` / `XHR` calls, click events, navigation events, custom traces
-- 🧭 **Release tagging** — every event ships with the git sha so symbolication is one click away
-- 🗺️ **Source maps** — uploaded to S3 at build time, applied lazily on view
-- 🚪 **Beacon flush** — events queued at `pagehide` ship via `navigator.sendBeacon`
-- 💾 **Offline queue** — events captured while offline persist in `IndexedDB` and retry on focus
-- 🔐 **PII scrub** — credentials (`password`, `token`, `Bearer ...`) are dropped; emails / phones / addresses are HMAC-hashed per-org (`a@b.com` → `[email:9f2a41c8]`) so traces stay correlatable without storing the value
+## ✨ Feature tour
 
-**Node**
+|     | Capability                                                  | What you get                                                                 |
+| --- | ----------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 🛑  | [**Error capture**](#error-capture--every-language)         | Uncaught exceptions + crash handlers in all five languages                   |
+| 🍞  | [**Breadcrumbs + scope**](#error-capture--every-language)   | Request-scoped user, tags, and a trail of what led to the error              |
+| 🔐  | [**PII scrub**](#-privacy--telemetry)                       | Credentials dropped; emails/phones HMAC-hashed per-org — all five SDKs       |
+| 🔭  | [**OTel traces + metrics**](#error-capture--every-language) | OTLP/HTTP export with M2M token auth — all five SDKs                         |
+| 🤖  | [**GenAI telemetry**](#-genai-telemetry-gen_ai)             | `gen_ai.*` semconv helpers everywhere; `wrapOpenAI` + LangChain integrations |
+| 🧱  | [**React / Next.js**](#nextjs)                              | `<ErrorBoundary>`, `useErrorHandler`, source-map upload — TypeScript only    |
+| 🖥️  | [**Desktop studio**](#-observability-studio-desktop)        | Native logs/errors/metrics client, multi-org, keychain-stored creds          |
 
-- 🛑 **`uncaughtException` + `unhandledRejection`** with full stack
-- 🪢 **Hono middleware** — captures errors propagating to the global `onError` handler
-- 🧠 **AsyncLocalStorage scope** — per-request user, tags, breadcrumbs without leaking across requests
-- 📦 **Batched transport** — `undici` with retry / backoff
-- 🔐 **Same PII scrub policy** as the browser — key from `SMOOAI_OBSERVABILITY_PII_HASH_KEY`
+### Error capture — every language
 
-**React / Next.js**
+Every SDK ships the same core: `captureException` (+ each runtime's global crash hooks), breadcrumbs, a request/task-scoped context that doesn't leak across requests, a batched retrying webhook transport, PII scrubbing, and OTLP trace + metric export. What differs per language is the framework glue:
 
-- 🧱 **`<ErrorBoundary>`** — drop-in component, captures and renders your fallback
-- ⚓ **`useErrorHandler()`** — for async event-handler errors React boundaries can't see
-- 🏗️ **`withSmooObservability(nextConfig)`** — enables production browser source maps and uploads them in CI
-- 🛡️ **`<RootErrorBoundary>`** — drop into `app/global-error.tsx` / `app/error.tsx`
+|                                                 | TypeScript   | Python                         | Rust                | Go                     | .NET                |
+| ----------------------------------------------- | ------------ | ------------------------------ | ------------------- | ---------------------- | ------------------- |
+| Error capture + crash handlers                  | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
+| Breadcrumbs + scoped context                    | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
+| Batched webhook transport                       | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
+| PII scrub + per-org HMAC hashing                | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
+| OTel traces + metrics (OTLP, M2M auth)          | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
+| GenAI `gen_ai.*` helpers                        | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
+| HTTP middleware                                 | Hono         | FastAPI / Starlette            | tower · reqwest     | net/http · Fiber · Gin | ASP.NET Core        |
+| LLM client instrumentation                      | `wrapOpenAI` | LangChain / LangGraph callback | —                   | —                      | —                   |
+| Log/session sampling (FNV-1a parity corpus)     | ✅           | —                              | —                   | —                      | —                   |
+| Source-map upload                               | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
+| React / Next.js bindings                        | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
+| Browser: beacon flush + IndexedDB offline queue | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
+| **Published**                                   | npm          | in-repo, unreleased            | in-repo, unreleased | in-repo, unreleased    | in-repo, unreleased |
+
+Browser extras (TypeScript only): `window.onerror` / `unhandledrejection` / `console.error` taps, `fetch`/XHR/click/navigation breadcrumbs, release tagging with the git sha, `navigator.sendBeacon` flush at `pagehide`, and an IndexedDB offline queue that retries on focus.
 
 ### What does NOT get captured
 
@@ -60,19 +72,21 @@
 
 ## 📦 Install
 
+**TypeScript** is the published SDK — React and Next.js bindings are subpath exports of the same package, not separate installs:
+
 ```sh
-pnpm add @smooai/observability                      # core (browser + Node)
-pnpm add @smooai/observability-react                # React bindings
-pnpm add @smooai/observability-next                 # Next.js wrapper
+pnpm add @smooai/observability     # core — plus /react, /next, /node, /otel, /metrics subpaths
 ```
 
-or with npm / yarn / bun — same names.
+**Python, Rust, Go, and .NET are complete and CI-tested, but not yet on their registries** (PyPI / crates.io / NuGet publishing is set up in [`publish.yml`](.github/workflows/publish.yml) and lands with the first language tag). Until then, use them from source:
 
-| Package                                         | npm                                                                                                                                                          | Purpose                                     |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------- |
-| [`@smooai/observability`](packages/core)        | [![npm](https://img.shields.io/npm/v/@smooai/observability?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability)             | Core client — browser + Node universal      |
-| [`@smooai/observability-react`](packages/react) | [![npm](https://img.shields.io/npm/v/@smooai/observability-react?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability-react) | React `<ErrorBoundary>` + `useErrorHandler` |
-| [`@smooai/observability-next`](packages/next)   | [![npm](https://img.shields.io/npm/v/@smooai/observability-next?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability-next)   | Next.js wrapper + sourcemap upload          |
+| SDK                         | Source                                           | Registry status                                                                                                                                  |
+| --------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [TypeScript](packages/core) | `packages/core`                                  | [![npm](https://img.shields.io/npm/v/@smooai/observability?style=flat-square&color=00A6A6)](https://www.npmjs.com/package/@smooai/observability) |
+| [Python](python)            | `python/` (`smooai_observability`)               | unreleased — not yet on PyPI                                                                                                                     |
+| [Rust](rust)                | `rust/observability` (`smooai-observability`)    | unreleased — not yet on crates.io                                                                                                                |
+| [Go](go)                    | `go get github.com/SmooAI/observability/go@main` | no SemVer tag yet — `@main` resolves via the module proxy                                                                                        |
+| [.NET](dotnet)              | `dotnet/` (`SmooAI.Observability`)               | unreleased — not yet on NuGet                                                                                                                    |
 
 ## 🚀 Usage
 
@@ -80,7 +94,7 @@ or with npm / yarn / bun — same names.
 
 ```ts
 // next.config.ts
-import { withSmooObservability } from '@smooai/observability-next/build';
+import { withSmooObservability } from '@smooai/observability/next/build';
 
 export default withSmooObservability(
     {
@@ -109,7 +123,7 @@ export async function register() {
 ```tsx
 // app/global-error.tsx
 'use client';
-import { RootErrorBoundary } from '@smooai/observability-next';
+import { RootErrorBoundary } from '@smooai/observability/next';
 
 export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
     return (
@@ -136,6 +150,8 @@ Client.init({
 Client.setUser({ id: 'user_abc', orgId: 'org_xyz' });
 ```
 
+React bindings live at the `/react` subpath — `import { ErrorBoundary, useErrorHandler } from '@smooai/observability/react'`.
+
 ### Node / Hono
 
 ```ts
@@ -150,14 +166,20 @@ Client.init({
 app.use('*', observabilityMiddleware());
 ```
 
-### Multi-language support
+### Python / Rust / Go / .NET
 
-The same ingest contract (`POST /webhooks/observability/{org_id}/{token}` with `type: 'error'`) accepts events from any language. Follow-up SDKs:
+Same shape, native idioms — each sub-README has the full walkthrough: [`python/`](python/README.md) (FastAPI middleware, LangChain callback, crash hooks), [`rust/`](rust/README.md) (tower + reqwest middleware), [`go/`](go/README.md) (net/http, Fiber, Gin), [`dotnet/`](dotnet/README.md) (ASP.NET Core middleware). A taste of Python:
 
-- 🐍 **Python** — `smooai-observability` on PyPI (tracked in SMOODEV-1067 follow-ups)
-- 🦀 **Rust** — `smooai-observability` crate (tracked in SMOODEV-1067 follow-ups)
-- 🐹 **Go** — `github.com/smooai/observability-go` (tracked in SMOODEV-1067 follow-ups)
-- 💠 **.NET** — `SmooAI.Observability` on NuGet (tracked in SMOODEV-1067 follow-ups)
+```python
+from smooai_observability import bootstrap_observability, capture_exception
+
+bootstrap_observability()  # reads SMOOAI_OBSERVABILITY_* env vars (never raises)
+
+try:
+    risky()
+except Exception as err:
+    capture_exception(err, tags={"area": "ingest"})
+```
 
 ### 🤖 GenAI telemetry (`gen_ai.*`)
 
@@ -199,6 +221,10 @@ setGenAIAttributes(span, { system: 'anthropic', operationName: 'chat', requestMo
 
 Known divergences: TypeScript, Python, Go and .NET emit `gen_ai.tool.names` as a **string array**; Rust emits a comma-joined string. Only TypeScript scrubs recorded message content today.
 
+### 📐 Cross-language parity, honestly
+
+[`parity/sampling-corpus.json`](parity/README.md) pins **170 vectors** for the FNV-1a session sampler, level normalization, W3C traceparent parse/format, and settings resolution. Today that corpus is **asserted only by the TypeScript SDK's CI lane** ([`packages/core/src/__tests__/parity-corpus.test.ts`](packages/core/src/__tests__/parity-corpus.test.ts)) — the sampler it governs isn't implemented in the other four languages yet, so their lanes don't consume it. The PII scrub behavior, by contrast, IS implemented in all five SDKs, verified by each language's own test suite against hand-copied vectors rather than a shared file. Wiring every lane to the shared corpus is tracked work; until then, this table — not the corpus — is the parity claim.
+
 ## 📖 Architecture
 
 The SDK is intentionally thin. It captures, batches, redacts credentials, hashes personal identifiers, and POSTs to a Smoo ingest endpoint. All of the heavy lifting — fingerprint grouping, source-map symbolication, dashboards, alerts, retention — lives in the Smoo platform.
@@ -209,26 +235,44 @@ The SDK is intentionally thin. It captures, batches, redacts credentials, hashes
   'lineColor':'#7c8aa0','secondaryColor':'#0b1426','tertiaryColor':'#0b1426','fontFamily':'ui-sans-serif, system-ui, sans-serif',
   'clusterBkg':'#0b1426','clusterBorder':'#22304a'}}}%%
 flowchart LR
-  REACT["observability-react<br/>ErrorBoundary · useErrorHandler"] -->|wraps| CORE
-  NEXT["observability-next<br/>withSmooObservability · sourcemaps"] -->|wraps| CORE
-  CORE["@smooai/observability<br/>capture · scope · scrub · batch"]
-  CORE -->|"POST /webhooks/observability/{org}/{token}<br/>Bearer B2M JWT · gzipped JSON"| INGEST[("Smoo platform<br/>group · symbolicate · alert")]
+  SDKS["5 SDKs<br/>TS · Python · Rust · Go · .NET<br/>capture · scope · scrub · batch"]
+  SDKS -->|"errors: POST /webhooks/observability/{org}/{token}"| INGEST[("Smoo platform<br/>group · symbolicate · alert")]
+  SDKS -->|"traces + metrics: OTLP/HTTP<br/>M2M token auth"| INGEST
+  STUDIO["Observability Studio<br/>desktop (Dioxus)"] -->|"reads api.smoo.ai<br/>M2M client_credentials"| INGEST
 
   classDef warm fill:#f49f0a,stroke:#ff6b6c,color:#1a0f00;
   classDef teal fill:#00a6a6,stroke:#00c2c2,color:#011;
-  class CORE warm
-  class INGEST teal
+  class SDKS warm
+  class INGEST,STUDIO teal
 ```
 
 Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Architecture.md](https://github.com/SmooAI/smooai/blob/main/docs/Architecture/Observability-Architecture.md).
 
+## 🖥️ Observability Studio (desktop)
+
+[`desktop/`](desktop/README.md) is a native desktop client for the whole stack — logs, errors, and metrics from `api.smoo.ai`, multi-org with credentials in your OS keychain, `Cmd+K` org/view switching. Built with Dioxus on the shared [`@smooai/ui`](https://github.com/SmooAI/ui) design system. Unsigned bundles for macOS / Linux / Windows ship from the [`studio-v*` GitHub Releases](https://github.com/SmooAI/observability/releases); or `cargo run --release -p observability-studio-app` from `desktop/`.
+
+## 🗂️ Five SDKs, one contract
+
+| Path                             | What it is                                                                                                               | Tests / CI                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
+| [`packages/core`](packages/core) | **TypeScript** reference SDK — browser + Node entries, `/react` · `/next` · `/otel` · `/metrics` · `/bootstrap` subpaths | vitest, published via changesets                                          |
+| [`python/`](python)              | **Python** SDK — capture, crash hooks, OTel, GenAI, FastAPI + LangChain integrations                                     | pytest lane in [`pr-checks.yml`](.github/workflows/pr-checks.yml)         |
+| [`rust/`](rust)                  | **Rust** SDK (`smooai-observability`) — capture, OTel, GenAI, tower + reqwest middleware                                 | cargo test + clippy lane                                                  |
+| [`go/`](go)                      | **Go** SDK — capture, OTel, GenAI, net/http + [Fiber](go/fiber) + [Gin](go/gin) middleware                               | go test lane                                                              |
+| [`dotnet/`](dotnet)              | **.NET** SDK (`SmooAI.Observability`) — capture, OTel, GenAI, ASP.NET Core middleware                                    | dotnet test lane                                                          |
+| [`desktop/`](desktop)            | **Observability Studio** — Dioxus desktop client                                                                         | [`build-desktop.yml`](.github/workflows/build-desktop.yml) (3-OS bundles) |
+| [`parity/`](parity)              | Shared sampling/traceparent/settings corpus (see [above](#-cross-language-parity-honestly))                              | consumed by the TS lane                                                   |
+
+Every language runs typecheck/lint/format/test in its own [`pr-checks.yml`](.github/workflows/pr-checks.yml) lane on every PR that touches it.
+
 ## 📖 Built with
 
-- **TypeScript** — strict mode, ESM-only, dual browser/Node entries via package `exports` map
-- **tsup** — bundling, dual ESM/types output, sourcemaps
-- **turborepo** — fast pipeline across the three packages
-- **vitest** — unit tests
-- **changesets** — versioning + npm publish via GitHub Actions
+- **TypeScript** — strict mode, ESM-only, dual browser/Node entries via package `exports` map; tsup, turborepo, vitest, changesets
+- **Python 3** — `uv`-managed, pytest
+- **Rust** — cargo workspace (`rust/` SDK, `desktop/` Dioxus app), clippy `-D warnings`
+- **Go** — stdlib-first module with Fiber/Gin subpackages
+- **.NET** — single `SmooAI.Observability` project + xUnit tests
 
 ## 📖 Privacy & telemetry
 
@@ -241,7 +285,7 @@ This SDK is opinionated about privacy:
 
 ## 📖 Status
 
-`0.1.0` — types and client skeleton are stable. The capture handlers, stack parsers, transport, and source-map upload land incrementally in upcoming `0.x` releases. The backend ingest, fingerprint grouping, dashboard, and customer-org rollout live in the [SmooAI/smooai monorepo](https://github.com/SmooAI/smooai) and are tracked under [SMOODEV-1067](https://smooai.atlassian.net/browse/SMOODEV-1067).
+The **TypeScript SDK** is live on npm and in production across the Smoo platform. The **Python, Rust, Go, and .NET SDKs** are feature-complete and CI-tested in-repo but **not yet published** to PyPI / crates.io / NuGet — the publish workflow ([`publish.yml`](.github/workflows/publish.yml)) is tag-triggered and no language tag has shipped yet. The **desktop studio** ships unsigned bundles from `studio-v*` releases. Backend ingest, fingerprint grouping, and dashboards live in the [SmooAI/smooai monorepo](https://github.com/SmooAI/smooai) under [SMOODEV-1067](https://smooai.atlassian.net/browse/SMOODEV-1067).
 
 ## 🧩 Part of Smoo AI {#part-of-smoo-ai}
 
