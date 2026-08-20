@@ -12,7 +12,7 @@
 
   <PropertyGroup>
     <PackageId>SmooAI.Observability</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.19.0</Version>
     <Authors>SmooAI</Authors>
     <Company>SmooAI</Company>
     <Description>Observability SDK for .NET — error capture, breadcrumbs, PII scrubbing, OpenTelemetry traces/metrics export, and GenAI semantic conventions. .NET port of @smooai/observability.</Description>

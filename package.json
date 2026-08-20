@@ -21,6 +21,9 @@
         "format": "oxfmt --write .",
         "format:check": "oxfmt --check .",
         "changeset": "changeset",
+        "sync-versions": "node scripts/sync-versions.mjs",
+        "sync-versions:check": "node scripts/sync-versions.mjs --check",
+        "version": "changeset version && node scripts/sync-versions.mjs",
         "ci:publish": "pnpm build && changeset publish",
         "release": "pnpm build && changeset publish"
     },

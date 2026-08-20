@@ -36,7 +36,7 @@ const (
 
 const (
 	sdkName    = "@smooai/observability-go"
-	sdkVersion = "0.1.0"
+	sdkVersion = "0.19.0"
 )
 
 // User is the user/org/session context attached to an event. All fields
