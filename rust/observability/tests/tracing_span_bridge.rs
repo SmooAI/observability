@@ -49,8 +49,8 @@ fn a_tracing_span_reaches_the_exporter() {
 
     let exporter = CollectingExporter::default();
     let provider = provider_with(exporter.clone());
-    let layer = tracing_opentelemetry::layer()
-        .with_tracer(provider.tracer("smooai-observability/tracing"));
+    let layer =
+        tracing_opentelemetry::layer().with_tracer(provider.tracer("smooai-observability/tracing"));
 
     let subscriber = tracing_subscriber::registry().with(layer);
     tracing::subscriber::with_default(subscriber, || {
@@ -103,8 +103,8 @@ fn span_attributes_survive_the_bridge() {
 
     let exporter = CollectingExporter::default();
     let provider = provider_with(exporter.clone());
-    let layer = tracing_opentelemetry::layer()
-        .with_tracer(provider.tracer("smooai-observability/tracing"));
+    let layer =
+        tracing_opentelemetry::layer().with_tracer(provider.tracer("smooai-observability/tracing"));
 
     tracing::subscriber::with_default(tracing_subscriber::registry().with(layer), || {
         let span = tracing::info_span!(
