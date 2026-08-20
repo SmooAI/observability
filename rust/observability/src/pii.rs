@@ -30,8 +30,8 @@
 //!
 //! Credential patterns are a direct port of the TS `pii.ts` patterns. The
 //! hashing layer is implemented identically in all five SDKs (TypeScript, Rust,
-//! Go, Python, .NET) — see `cross_sdk_parity_vectors` for the shared vectors
-//! every port asserts verbatim.
+//! Go, Python, .NET), enforced by the shared `parity/pii-corpus.json` that all
+//! five test suites load — see `parity/PII-README.md`.
 
 use once_cell::sync::{Lazy, OnceCell};
 use regex::Regex;
@@ -412,35 +412,94 @@ mod tests {
         assert!(hex.chars().all(|c| c.is_ascii_hexdigit()), "{t}");
     }
 
-    /// Pins the exact bytes every SDK must produce. Computed independently
-    /// (python `hmac.new(key, org\0kind\0normalized, "sha256")`) and asserted
-    /// verbatim in the TS, Go, Python and .NET ports too. If any SDK's message
-    /// framing, normalization or truncation drifts, exactly one of these breaks.
+    // ---- shared PII corpus (ADR-097 §4) -----------------------------------
+    //
+    // The vectors used to be seven tuples typed out in five languages. Nothing
+    // detected a divergence in the *set* — only in values someone remembered to
+    // copy. They now live in `parity/pii-corpus.json`, which all five SDKs load.
+    // These tests must live in this module, not in `tests/`, because
+    // `token_with_key` is crate-private on purpose.
+
+    /// The corpus lives at the repo root, two levels above this crate.
+    fn pii_corpus() -> serde_json::Value {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../parity/pii-corpus.json");
+        let raw = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("PII corpus unreadable at {path}: {e}"));
+        serde_json::from_str(&raw).expect("PII corpus is not valid JSON")
+    }
+
+    fn kind_from_label(label: &str) -> PiiKind {
+        match label {
+            "email" => PiiKind::Email,
+            "phone" => PiiKind::Phone,
+            "address" => PiiKind::Address,
+            other => panic!("corpus names an unknown PII kind: {other}"),
+        }
+    }
+
+    fn corpus_section(c: &serde_json::Value, name: &str) -> Vec<serde_json::Value> {
+        c[name]
+            .as_array()
+            .unwrap_or_else(|| panic!("corpus section `{name}` missing or not an array"))
+            .clone()
+    }
+
     #[test]
-    fn cross_sdk_parity_vectors() {
-        let cases = [
-            (PiiKind::Email, "a@b.com", "org-1", "[email:02ea437f]"),
-            (PiiKind::Email, "A@B.COM ", "org-1", "[email:02ea437f]"),
-            (PiiKind::Email, "a@b.com", "org-2", "[email:fd96f7dc]"),
-            (PiiKind::Email, "a@b.com", "", "[email:453b154f]"),
-            (
-                PiiKind::Phone,
-                "(415) 555-0142",
-                "org-1",
-                "[phone:415a9aea]",
-            ),
-            (PiiKind::Phone, "415-555-0142", "org-1", "[phone:415a9aea]"),
-            (
-                PiiKind::Address,
-                "1600  Pennsylvania   Ave",
-                "org-1",
-                "[address:c5351f4a]",
-            ),
-        ];
-        for (kind, raw, org, want) in cases {
+    fn corpus_key_matches_the_one_these_tests_use() {
+        // If the corpus rotates its key, every expected token changes — this
+        // asserts the local constant is the key the vectors were derived under,
+        // so a mismatch reads as "wrong key", not "the hash broke".
+        let c = pii_corpus();
+        assert_eq!(
+            c["hash"]["key"].as_str(),
+            Some(std::str::from_utf8(KEY).unwrap())
+        );
+        assert_eq!(
+            c["hash"]["otherKey"].as_str(),
+            Some(std::str::from_utf8(OTHER_KEY).unwrap())
+        );
+        assert_eq!(c["version"].as_u64(), Some(1));
+    }
+
+    #[test]
+    fn corpus_token_with_key_vectors() {
+        let c = pii_corpus();
+        let vectors = corpus_section(&c, "tokenWithKey");
+        assert!(!vectors.is_empty(), "corpus has no tokenWithKey vectors");
+        for v in vectors {
+            let kind = kind_from_label(v["kind"].as_str().unwrap());
+            let (raw, org) = (v["raw"].as_str().unwrap(), v["orgId"].as_str().unwrap());
             assert_eq!(
                 token_with_key(kind, raw, org, Some(KEY)),
-                want,
+                v["expected"].as_str().unwrap(),
+                "{kind:?} {raw:?} {org:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn corpus_token_with_other_key_vectors() {
+        let c = pii_corpus();
+        for v in corpus_section(&c, "tokenWithOtherKey") {
+            let kind = kind_from_label(v["kind"].as_str().unwrap());
+            let (raw, org) = (v["raw"].as_str().unwrap(), v["orgId"].as_str().unwrap());
+            assert_eq!(
+                token_with_key(kind, raw, org, Some(OTHER_KEY)),
+                v["expected"].as_str().unwrap(),
+                "{kind:?} {raw:?} {org:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn corpus_token_without_key_vectors() {
+        let c = pii_corpus();
+        for v in corpus_section(&c, "tokenWithoutKey") {
+            let kind = kind_from_label(v["kind"].as_str().unwrap());
+            let (raw, org) = (v["raw"].as_str().unwrap(), v["orgId"].as_str().unwrap());
+            assert_eq!(
+                token_with_key(kind, raw, org, None),
+                v["expected"].as_str().unwrap(),
                 "{kind:?} {raw:?} {org:?}"
             );
         }

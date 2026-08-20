@@ -1,3 +1,7 @@
+import json
+from pathlib import Path
+from typing import Any
+
 import pytest
 
 from smooai_observability import pii
@@ -189,23 +193,45 @@ def test_bootstrap_reads_pii_hash_key_from_env(monkeypatch):
         bootstrap_mod._bootstrapped = None
 
 
-@pytest.mark.parametrize(
-    ("kind", "raw", "org", "expected"),
-    [
-        (pii.PiiKind.EMAIL, "a@b.com", "org-1", "[email:02ea437f]"),
-        (pii.PiiKind.EMAIL, "A@B.COM ", "org-1", "[email:02ea437f]"),
-        (pii.PiiKind.EMAIL, "a@b.com", "org-2", "[email:fd96f7dc]"),
-        (pii.PiiKind.EMAIL, "a@b.com", "", "[email:453b154f]"),
-        (pii.PiiKind.PHONE, "(415) 555-0142", "org-1", "[phone:415a9aea]"),
-        (pii.PiiKind.PHONE, "415-555-0142", "org-1", "[phone:415a9aea]"),
-        (pii.PiiKind.ADDRESS, "1600  Pennsylvania   Ave", "org-1", "[address:c5351f4a]"),
-    ],
-)
-def test_cross_sdk_parity_vectors(kind, raw, org, expected):
-    """Pins the exact bytes every SDK must produce.
+# ---- shared PII corpus (ADR-097 §4) ----------------------------------------
+#
+# The vectors used to be seven tuples typed out in five languages. Nothing
+# detected a divergence in the *set* — only in values someone remembered to
+# copy. They now live in ``parity/pii-corpus.json``, which all five SDKs load.
 
-    Computed independently and asserted verbatim in all five SDKs. If any SDK's
-    message framing, normalization or truncation drifts, exactly one of these
-    breaks.
+# tests/ -> python/ -> repo root
+PII_CORPUS_PATH = Path(__file__).resolve().parents[2] / "parity" / "pii-corpus.json"
+PII_CORPUS: dict[str, Any] = json.loads(PII_CORPUS_PATH.read_text(encoding="utf-8"))
+
+
+def pii_section(name: str) -> list[dict[str, Any]]:
+    vectors = PII_CORPUS[name]
+    assert isinstance(vectors, list) and vectors, f"corpus section `{name}` missing or empty"
+    return vectors
+
+
+def test_pii_corpus_key_matches_the_one_these_tests_use():
+    """If the corpus rotates its key, every expected token changes.
+
+    Asserting the local constants are the keys the vectors were derived under
+    makes a mismatch read as "wrong key", not "the hash broke".
     """
-    assert pii._token_with_key(kind, raw, org, KEY) == expected
+    assert PII_CORPUS["version"] == 1
+    assert PII_CORPUS["hash"]["key"].encode() == KEY
+    assert PII_CORPUS["hash"]["otherKey"].encode() == OTHER_KEY
+
+
+@pytest.mark.parametrize("v", pii_section("tokenWithKey"))
+def test_pii_corpus_token_with_key(v):
+    assert pii._token_with_key(pii.PiiKind(v["kind"]), v["raw"], v["orgId"], KEY) == v["expected"]
+
+
+@pytest.mark.parametrize("v", pii_section("tokenWithOtherKey"))
+def test_pii_corpus_token_with_other_key(v):
+    assert pii._token_with_key(pii.PiiKind(v["kind"]), v["raw"], v["orgId"], OTHER_KEY) == v["expected"]
+
+
+@pytest.mark.parametrize("v", pii_section("tokenWithoutKey"))
+def test_pii_corpus_token_without_key(v):
+    """No key installed → redaction, never a hash under a guessable key."""
+    assert pii._token_with_key(pii.PiiKind(v["kind"]), v["raw"], v["orgId"], None) == v["expected"]

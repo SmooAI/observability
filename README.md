@@ -235,7 +235,7 @@ Known divergences: TypeScript, Python, Go and .NET emit `gen_ai.tool.names` as a
 
 `parity/**` is a path-filter trigger for every language lane, so touching the corpus re-runs all five.
 
-The PII scrub behavior is likewise implemented in all five SDKs, but its vectors are still **hand-copied literals** in each language's own test file rather than a shared corpus — that is the remaining gap, and nothing detects a divergence in the _set_ of vectors.
+The PII token — the `[email:02ea437f]` handle that replaces a personal identifier — has its own shared corpus, [`parity/pii-corpus.json`](parity/PII-README.md), loaded by the same five lanes. It pins the HMAC message framing, the per-org salt, the per-kind normalization, and the no-key redaction fallback.
 
 ## 📖 Architecture
 
@@ -274,7 +274,7 @@ Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Ar
 | [`go/`](go)                      | **Go** SDK — capture, OTel, GenAI, net/http + [Fiber](go/fiber) + [Gin](go/gin) middleware                               | go test lane                                                                                                             |
 | [`dotnet/`](dotnet)              | **.NET** SDK (`SmooAI.Observability`) — capture, OTel, GenAI, ASP.NET Core middleware                                    | dotnet test lane                                                                                                         |
 | [`desktop/`](desktop)            | **Observability Studio** — Dioxus desktop client                                                                         | fmt + clippy + test lane; [`build-desktop.yml`](.github/workflows/build-desktop.yml) bundles 3 OSes on a `studio-v*` tag |
-| [`parity/`](parity)              | Shared sampling/traceparent/settings corpus (see [above](#-cross-language-parity-honestly))                              | loaded by all five language lanes                                                                                        |
+| [`parity/`](parity)              | Shared corpora — [sampling/traceparent/settings](parity/README.md) and [PII tokens](parity/PII-README.md)                | both loaded by all five language lanes                                                                                   |
 
 Every language runs typecheck/lint/format/test in its own [`pr-checks.yml`](.github/workflows/pr-checks.yml) lane on every PR that touches it.
 

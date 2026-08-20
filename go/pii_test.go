@@ -1,6 +1,8 @@
 package observability
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 )
@@ -240,28 +242,104 @@ func TestScrubHeadersForOrgSaltsValues(t *testing.T) {
 	}
 }
 
-// TestCrossSDKParityVectors pins the exact bytes every SDK must produce.
-// Computed independently (python `hmac.new(key, org\0kind\0normalized,
-// "sha256")`) and asserted verbatim in all five SDKs. If any SDK's message
-// framing, normalization or truncation drifts, exactly one of these breaks.
-func TestCrossSDKParityVectors(t *testing.T) {
-	cases := []struct {
-		kind PiiKind
-		raw  string
-		org  string
-		want string
-	}{
-		{PiiEmail, "a@b.com", "org-1", "[email:02ea437f]"},
-		{PiiEmail, "A@B.COM ", "org-1", "[email:02ea437f]"},
-		{PiiEmail, "a@b.com", "org-2", "[email:fd96f7dc]"},
-		{PiiEmail, "a@b.com", "", "[email:453b154f]"},
-		{PiiPhone, "(415) 555-0142", "org-1", "[phone:415a9aea]"},
-		{PiiPhone, "415-555-0142", "org-1", "[phone:415a9aea]"},
-		{PiiAddress, "1600  Pennsylvania   Ave", "org-1", "[address:c5351f4a]"},
+// ---- shared PII corpus (ADR-097 §4) ---------------------------------------
+//
+// The vectors used to be seven tuples typed out in five languages. Nothing
+// detected a divergence in the *set* — only in values someone remembered to
+// copy. They now live in parity/pii-corpus.json, which all five SDKs load.
+
+// The corpus lives at the repo root, one level above this module.
+const piiCorpusPath = "../parity/pii-corpus.json"
+
+type piiVector struct {
+	Kind     string `json:"kind"`
+	Raw      string `json:"raw"`
+	OrgID    string `json:"orgId"`
+	Expected string `json:"expected"`
+}
+
+type piiCorpusFile struct {
+	Version int `json:"version"`
+	Hash    struct {
+		Key      string `json:"key"`
+		OtherKey string `json:"otherKey"`
+	} `json:"hash"`
+	TokenWithKey      []piiVector `json:"tokenWithKey"`
+	TokenWithOtherKey []piiVector `json:"tokenWithOtherKey"`
+	TokenWithoutKey   []piiVector `json:"tokenWithoutKey"`
+}
+
+func loadPiiCorpus(t *testing.T) piiCorpusFile {
+	t.Helper()
+	raw, err := os.ReadFile(piiCorpusPath)
+	if err != nil {
+		t.Fatalf("PII corpus unreadable at %s: %v", piiCorpusPath, err)
 	}
-	for _, c := range cases {
-		if got := tokenWithKey(c.kind, c.raw, c.org, []byte(testKey)); got != c.want {
-			t.Errorf("tokenWithKey(%s, %q, %q) = %s, want %s", c.kind, c.raw, c.org, got, c.want)
+	var c piiCorpusFile
+	if err := json.Unmarshal(raw, &c); err != nil {
+		t.Fatalf("PII corpus is not valid JSON: %v", err)
+	}
+	return c
+}
+
+func piiKindFromLabel(t *testing.T, label string) PiiKind {
+	t.Helper()
+	switch label {
+	case "email":
+		return PiiEmail
+	case "phone":
+		return PiiPhone
+	case "address":
+		return PiiAddress
+	}
+	t.Fatalf("corpus names an unknown PII kind: %s", label)
+	return ""
+}
+
+// TestPiiCorpusKeyMatchesTheOneTheseTestsUse guards the setup, not the hash: if
+// the corpus rotates its key every expected token changes, and this makes the
+// mismatch read as "wrong key" rather than "the hash broke".
+func TestPiiCorpusKeyMatchesTheOneTheseTestsUse(t *testing.T) {
+	c := loadPiiCorpus(t)
+	if c.Version != 1 {
+		t.Fatalf("PII corpus version is %d, want 1", c.Version)
+	}
+	if c.Hash.Key != testKey {
+		t.Errorf("corpus key %q != testKey %q", c.Hash.Key, testKey)
+	}
+	if c.Hash.OtherKey != testOtherKey {
+		t.Errorf("corpus otherKey %q != testOtherKey %q", c.Hash.OtherKey, testOtherKey)
+	}
+}
+
+func TestPiiCorpusTokenWithKey(t *testing.T) {
+	c := loadPiiCorpus(t)
+	if len(c.TokenWithKey) == 0 {
+		t.Fatal("corpus has no tokenWithKey vectors")
+	}
+	for _, v := range c.TokenWithKey {
+		if got := tokenWithKey(piiKindFromLabel(t, v.Kind), v.Raw, v.OrgID, []byte(testKey)); got != v.Expected {
+			t.Errorf("tokenWithKey(%s, %q, %q) = %s, want %s", v.Kind, v.Raw, v.OrgID, got, v.Expected)
+		}
+	}
+}
+
+func TestPiiCorpusTokenWithOtherKey(t *testing.T) {
+	c := loadPiiCorpus(t)
+	for _, v := range c.TokenWithOtherKey {
+		if got := tokenWithKey(piiKindFromLabel(t, v.Kind), v.Raw, v.OrgID, []byte(testOtherKey)); got != v.Expected {
+			t.Errorf("tokenWithKey(%s, %q, %q) = %s, want %s", v.Kind, v.Raw, v.OrgID, got, v.Expected)
+		}
+	}
+}
+
+// TestPiiCorpusTokenWithoutKey pins the fail-safe: no key installed means
+// redaction, never a hash under a guessable key.
+func TestPiiCorpusTokenWithoutKey(t *testing.T) {
+	c := loadPiiCorpus(t)
+	for _, v := range c.TokenWithoutKey {
+		if got := tokenWithKey(piiKindFromLabel(t, v.Kind), v.Raw, v.OrgID, nil); got != v.Expected {
+			t.Errorf("tokenWithKey(%s, %q, %q) = %s, want %s", v.Kind, v.Raw, v.OrgID, got, v.Expected)
 		}
 	}
 }
