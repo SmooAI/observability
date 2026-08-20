@@ -45,21 +45,23 @@ A monorepo of observability SDKs — **TypeScript** (the reference, on npm), **P
 
 Every SDK ships the same core: `captureException` (+ each runtime's global crash hooks), breadcrumbs, a request/task-scoped context that doesn't leak across requests, a batched retrying webhook transport, PII scrubbing, and OTLP trace + metric export. What differs per language is the framework glue:
 
-|                                                 | TypeScript   | Python                         | Rust                | Go                     | .NET                |
-| ----------------------------------------------- | ------------ | ------------------------------ | ------------------- | ---------------------- | ------------------- |
-| Error capture + crash handlers                  | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| Breadcrumbs + scoped context                    | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| Batched webhook transport                       | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| PII scrub + per-org HMAC hashing                | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| OTel traces + metrics (OTLP, M2M auth)          | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| GenAI `gen_ai.*` helpers                        | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| HTTP middleware                                 | Hono         | FastAPI / Starlette            | tower · reqwest     | net/http · Fiber · Gin | ASP.NET Core        |
-| LLM client instrumentation                      | `wrapOpenAI` | LangChain / LangGraph callback | —                   | —                      | —                   |
-| Log/session sampling (FNV-1a parity corpus)     | ✅           | ✅                             | ✅                  | ✅                     | ✅                  |
-| Source-map upload                               | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
-| React / Next.js bindings                        | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
-| Browser: beacon flush + IndexedDB offline queue | ✅           | n/a                            | n/a                 | n/a                    | n/a                 |
-| **Published**                                   | npm          | in-repo, unreleased            | in-repo, unreleased | in-repo, unreleased    | in-repo, unreleased |
+|                                                 | TypeScript   | Python                         | Rust                          | Go                            | .NET                          |
+| ----------------------------------------------- | ------------ | ------------------------------ | ----------------------------- | ----------------------------- | ----------------------------- |
+| Error capture + crash handlers                  | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| Breadcrumbs + scoped context                    | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| Batched webhook transport                       | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| PII scrub + per-org HMAC hashing                | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| OTel traces + metrics (OTLP, M2M auth)          | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| GenAI `gen_ai.*` helpers                        | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| HTTP middleware                                 | Hono         | FastAPI / Starlette            | tower · reqwest               | net/http · Fiber · Gin        | ASP.NET Core                  |
+| LLM client instrumentation                      | `wrapOpenAI` | LangChain / LangGraph callback | —                             | —                             | —                             |
+| Log/session sampling (FNV-1a parity corpus)     | ✅           | ✅                             | ✅                            | ✅                            | ✅                            |
+| Source-map upload                               | ✅           | n/a                            | n/a                           | n/a                           | n/a                           |
+| React / Next.js bindings                        | ✅           | n/a                            | n/a                           | n/a                           | n/a                           |
+| Browser: beacon flush + IndexedDB offline queue | ✅           | n/a                            | n/a                           | n/a                           | n/a                           |
+| **Published**                                   | npm          | release-ready, not yet pushed  | release-ready, not yet pushed | release-ready, not yet pushed | release-ready, not yet pushed |
+
+The four non-npm SDKs are **release-ready but deliberately unpublished**: manifests, metadata, dry runs and the `publish.yml` gates are all in place, and the names are free on crates.io, PyPI and NuGet — but a first publish to those registries is irreversible, so it stays a human decision. See [`RELEASING.md`](RELEASING.md) for the one command each.
 
 Browser extras (TypeScript only): `window.onerror` / `unhandledrejection` / `console.error` taps, `fetch`/XHR/click/navigation breadcrumbs, release tagging with the git sha, `navigator.sendBeacon` flush at `pagehide`, and an IndexedDB offline queue that retries on focus.
 

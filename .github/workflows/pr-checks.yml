@@ -72,7 +72,7 @@ jobs:
     # rather than warning.
     #
     # It runs on every PR because drift is introduced by editing any one of
-    # eleven files across five languages, and a path filter would let exactly
+    # fourteen files across five languages, and a path filter would let exactly
     # the interesting case through: a PR that touches only Go, in a repo where
     # the version came from a TypeScript manifest.
     versions:
@@ -200,6 +200,14 @@ jobs:
                       [ -f "$m/go.mod" ] || continue
                       echo "::group::go test ($m)"; (cd "$m" && go test ./...); echo "::endgroup::"
                   done
+
+            # Catch an unpublishable module at review time rather than at
+            # release. A `replace` directive or a mismatched module path builds
+            # fine in here and resolves nothing for anyone outside — which is
+            # how both adapters shipped requiring a core version that has never
+            # existed. Same script publish.yml runs.
+            - name: Verify the modules are publishable
+              run: bash ../scripts/check-go-modules.sh
 
     # Python lane — ruff lint + format, pytest. Package in python/.
     python:

@@ -28,16 +28,27 @@ name: Publish SDKs
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # TAGGING CONVENTION (push a tag to publish that language):
-#   rust-v<semver>      e.g. rust-v0.1.0     → crates.io
-#   python-v<semver>    e.g. python-v0.1.0   → PyPI
-#   dotnet-v<semver>    e.g. dotnet-v0.1.0   → NuGet
-#   go/v<semver>        e.g. go/v0.1.0       → pkg.go.dev (module proxy, no push)
+#   rust-v<semver>        e.g. rust-v0.19.0       → crates.io
+#   python-v<semver>      e.g. python-v0.19.0     → PyPI
+#   dotnet-v<semver>      e.g. dotnet-v0.19.0     → NuGet
+#   go/v<semver>          e.g. go/v0.19.0         → pkg.go.dev (module proxy)
+#   go/fiber/v<semver>    e.g. go/fiber/v0.19.0   → pkg.go.dev (Fiber adapter)
+#   go/gin/v<semver>      e.g. go/gin/v0.19.0     → pkg.go.dev (Gin adapter)
 #
-# The Go tag prefix is `go/` (not `go-v`) because the module lives in the `go/`
-# subdirectory; Go's module proxy requires the tag to be `<subdir>/v<semver>`.
+# The Go tag prefixes are directory paths (not `go-v`) because Go's module proxy
+# requires a submodule's tag to be `<subdir>/v<semver>`. `go/fiber` and `go/gin`
+# are separate modules with their own go.mod, so they get their own tags.
 #
-# Each tag should match the version declared in that language's manifest. Bump
-# the manifest version, commit, then push the matching tag.
+# ⚠️ ORDER MATTERS for Go: push `go/v<semver>` FIRST and let the proxy pick it
+# up, then `go/fiber/v<semver>` and `go/gin/v<semver>`. The adapters' go.mod
+# files `require` the core module at that exact version — they cannot resolve
+# until it exists.
+#
+# Every tag must match the version in `packages/core/package.json`, which is the
+# single source of truth for all five SDKs (see scripts/sync-versions.mjs). The
+# `verify` job below enforces that and every publish job depends on it, so a
+# mistyped tag fails before anything is uploaded — which matters because
+# crates.io, PyPI and NuGet publishes are IRREVERSIBLE.
 
 on:
     workflow_dispatch:
@@ -62,6 +73,8 @@ on:
             - 'python-v*'
             - 'dotnet-v*'
             - 'go/v*'
+            - 'go/fiber/v*'
+            - 'go/gin/v*'
 
 # Never run two publishes for the same ref at once.
 concurrency:
@@ -69,8 +82,62 @@ concurrency:
     cancel-in-progress: false
 
 jobs:
+    # ── Gate: the tag must mean what it says ─────────────────────────────────
+    #
+    # Every publish job depends on this. crates.io, PyPI and NuGet publishes are
+    # IRREVERSIBLE — a version pushed under a mistyped tag can be yanked but
+    # never replaced — so the cheap check runs first, on its own runner, before
+    # any language toolchain boots.
+    #
+    # Two assertions:
+    #   1. all 14 version-bearing files across the five SDKs agree with
+    #      packages/core/package.json (the same check pr-checks.yml runs)
+    #   2. the tag's version IS that version
+    #
+    # Together they mean: whatever this tag publishes reports the version the
+    # tag claims. That is precisely what was NOT true before — every SDK
+    # hard-coded 0.1.0 while npm shipped 0.19.0.
+    verify:
+        runs-on: ubuntu-latest
+        timeout-minutes: 5
+        outputs:
+            version: ${{ steps.expected.outputs.version }}
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version: 22
+
+            - name: Check version sync across all five SDKs
+              run: node scripts/sync-versions.mjs --check
+
+            - name: Read the expected version
+              id: expected
+              run: echo "version=$(node -p "require('./packages/core/package.json').version")" >> "$GITHUB_OUTPUT"
+
+            - name: Verify the tag matches
+              if: startsWith(github.ref, 'refs/tags/')
+              run: |
+                  TAG="${GITHUB_REF#refs/tags/}"
+                  # Strip whichever language prefix this tag carries. Anchored and
+                  # explicit rather than a greedy strip, so an unrecognised tag
+                  # shape fails loudly instead of silently yielding the whole tag.
+                  VERSION="$(printf '%s' "$TAG" | sed -E 's#^(rust-v|python-v|dotnet-v|go/(fiber/|gin/)?v)##')"
+                  EXPECTED="${{ steps.expected.outputs.version }}"
+                  echo "tag=$TAG  tag-version=$VERSION  package.json=$EXPECTED"
+                  if [ "$VERSION" = "$TAG" ]; then
+                      echo "::error::tag '$TAG' does not match any known prefix (rust-v, python-v, dotnet-v, go/v, go/fiber/v, go/gin/v)"
+                      exit 1
+                  fi
+                  if [ "$VERSION" != "$EXPECTED" ]; then
+                      echo "::error::tag '$TAG' says version $VERSION but packages/core/package.json says $EXPECTED — nothing published"
+                      exit 1
+                  fi
+
     # ── Rust → crates.io ─────────────────────────────────────────────────────
     rust:
+        needs: verify
         if: >-
             startsWith(github.ref, 'refs/tags/rust-v') ||
             (github.event_name == 'workflow_dispatch' && inputs.language == 'rust')
@@ -105,17 +172,23 @@ jobs:
 
             # Verifies the crate packages cleanly (metadata, included files,
             # builds from the packaged tarball) without uploading.
+            # --locked, not --allow-dirty. A publish that needs to mutate the
+            # lockfile is publishing something the tag never built; the sibling
+            # repos reach for --allow-dirty precisely because their version sync
+            # runs after publish and leaves the tree dirty. Ours runs in the
+            # `version` lifecycle, so the tree is clean and the lock is current.
             - name: Package (verify)
-              run: cargo package -p smooai-observability
+              run: cargo package --locked -p smooai-observability
 
             - name: Publish to crates.io
               if: ${{ !inputs.dry_run }}
-              run: cargo publish -p smooai-observability
+              run: cargo publish --locked -p smooai-observability
               env:
                   CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
     # ── Python → PyPI ────────────────────────────────────────────────────────
     python:
+        needs: verify
         if: >-
             startsWith(github.ref, 'refs/tags/python-v') ||
             (github.event_name == 'workflow_dispatch' && inputs.language == 'python')
@@ -172,6 +245,7 @@ jobs:
 
     # ── .NET → NuGet ─────────────────────────────────────────────────────────
     dotnet:
+        needs: verify
         if: >-
             startsWith(github.ref, 'refs/tags/dotnet-v') ||
             (github.event_name == 'workflow_dispatch' && inputs.language == 'dotnet')
@@ -218,11 +292,18 @@ jobs:
     # Go modules are "published" implicitly: once a SemVer tag exists on the
     # repo, the Go module proxy (proxy.golang.org) fetches and caches it, and
     # pkg.go.dev indexes the docs. There is no registry to push to and no secret
-    # required. This job just validates the module is sound and warms the proxy
-    # so the new version is immediately resolvable.
+    # required. This job validates the modules are sound and warms the proxy so
+    # the new version is immediately resolvable.
+    #
+    # THREE modules live under go/: the core, plus the `fiber` and `gin`
+    # adapters, each with its own go.mod and therefore its own tag. The adapters
+    # depend on the core by its published path and version — no `replace`, which
+    # a consumer would ignore anyway — so `go/v<semver>` must be tagged and on
+    # the proxy BEFORE the adapter tags.
     go:
+        needs: verify
         if: >-
-            startsWith(github.ref, 'refs/tags/go/v') ||
+            startsWith(github.ref, 'refs/tags/go/') ||
             (github.event_name == 'workflow_dispatch' && inputs.language == 'go')
         runs-on: ubuntu-latest
         timeout-minutes: 20
@@ -238,7 +319,9 @@ jobs:
                   go-version: '1.25'
                   cache-dependency-path: go/go.mod
 
-            # Gate on the PR-lane checks before warming the proxy.
+            # Gate on the PR-lane checks before warming the proxy. gofmt is
+            # recursive, so one run covers all three modules; vet and test are
+            # per-module because each has its own go.mod.
             - name: Format check
               run: |
                   unformatted=$(gofmt -l .)
@@ -248,37 +331,48 @@ jobs:
                       exit 1
                   fi
 
-            - name: Vet
-              run: go vet ./...
-
-            - name: Test
-              run: go test ./...
-
-            # Confirm the module path declared in go.mod matches the
-            # tag-derived path Go expects (github.com/SmooAI/observability/go).
-            - name: Verify module path
+            - name: Vet + test every module
               run: |
-                  EXPECTED="github.com/SmooAI/observability/go"
-                  ACTUAL=$(go list -m)
-                  echo "module path: $ACTUAL"
-                  if [ "$ACTUAL" != "$EXPECTED" ]; then
-                      echo "::error::go.mod module path '$ACTUAL' != expected '$EXPECTED'"
-                      exit 1
-                  fi
+                  for m in . fiber gin; do
+                      echo "::group::go vet + test ($m)"
+                      (cd "$m" && go vet ./... && go test ./...)
+                      echo "::endgroup::"
+                  done
+
+            # The two things that make a Go module unresolvable for anyone
+            # outside this repo — a `replace` directive (consumers ignore it) and
+            # a module path that does not match its directory — plus the /vN
+            # suffix rule for majors >= 2. Same script the PR lane runs, so the
+            # two cannot drift.
+            - name: Verify the modules are publishable
+              run: bash ../scripts/check-go-modules.sh
 
             # Ask the module proxy to fetch the just-pushed tag so pkg.go.dev
             # indexes it right away instead of on first external `go get`. Only
-            # meaningful on a tag push; harmless to skip on dispatch/dry-run.
+            # meaningful on a tag push; skipped on dispatch/dry-run.
+            #
+            # The module path is derived from the tag, so one step serves all
+            # three: `go/v0.19.0` -> …/go, `go/fiber/v0.19.0` -> …/go/fiber.
             - name: Warm module proxy
-              if: ${{ startsWith(github.ref, 'refs/tags/go/v') && !inputs.dry_run }}
+              if: ${{ startsWith(github.ref, 'refs/tags/go/') && !inputs.dry_run }}
               run: |
-                  VERSION="${GITHUB_REF#refs/tags/go/}"
-                  echo "Requesting github.com/SmooAI/observability/go@$VERSION from the proxy"
-                  GOPROXY=proxy.golang.org GOFLAGS=-mod=mod \
-                    go install "github.com/SmooAI/observability/go@$VERSION" 2>/dev/null || true
-                  # Touch the proxy version endpoint directly as a fallback so the
-                  # version is registered even if the package has no installable
-                  # main; a library has none, so the curl is the reliable path.
-                  curl -fsSL "https://proxy.golang.org/github.com/!smoo!a!i/observability/go/@v/${VERSION}.info" \
-                    && echo "proxy registered $VERSION" \
-                    || echo "proxy fetch returned non-zero (it may catch up shortly)"
+                  TAG="${GITHUB_REF#refs/tags/}"           # e.g. go/fiber/v0.19.0
+                  VERSION="${TAG##*/}"                     # e.g. v0.19.0
+                  SUBDIR="${TAG%/*}"                       # e.g. go/fiber
+                  MODULE="github.com/SmooAI/observability/${SUBDIR}"
+                  echo "Requesting ${MODULE}@${VERSION} from the proxy"
+                  # The proxy escapes uppercase as !<lowercase>, so SmooAI is
+                  # !smoo!a!i. Hand-writing that is why this is a literal.
+                  ESCAPED="github.com/!smoo!a!i/observability/${SUBDIR}"
+                  for attempt in 1 2 3 4 5; do
+                      if curl -fsSL "https://proxy.golang.org/${ESCAPED}/@v/${VERSION}.info"; then
+                          echo "proxy registered ${MODULE}@${VERSION}"
+                          exit 0
+                      fi
+                      echo "proxy has not caught up yet (attempt $attempt); retrying in 15s"
+                      sleep 15
+                  done
+                  # Non-fatal: the tag exists either way and the proxy fetches on
+                  # first external `go get`. Failing the job here would report a
+                  # successful release as broken.
+                  echo "::warning::proxy did not serve ${MODULE}@${VERSION} within ~75s; it should catch up shortly"

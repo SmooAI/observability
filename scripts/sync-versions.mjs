@@ -60,10 +60,19 @@ const TARGETS = [
     { file: 'python/uv.lock', pattern: /(name = "smooai-observability"\nversion = ")[^"]+(")/ },
 
     // ---- Go --------------------------------------------------------------
-    // Go has no manifest version — a module's version IS its git tag — so the
-    // reported SDK version is the only thing to sync. The tag/manifest
-    // agreement is enforced separately, in publish.yml.
+    // The core module has no manifest version — a module's version IS its git
+    // tag — so its reported SDK version is the only thing to sync there. The
+    // tag/version agreement is enforced separately, in publish.yml.
     { file: 'go/types.go', pattern: /(sdkVersion = ")[^"]+(")/ },
+    // The fiber/gin adapters are separate modules that depend on the core by
+    // its PUBLISHED path and version. These lines are what make them
+    // resolvable for anyone outside this repo, so they are version-bearing in
+    // the strongest sense: get them wrong and `go get` fails outright.
+    { file: 'go/fiber/go.mod', pattern: /(\tgithub\.com\/SmooAI\/observability\/go v)[^\n]+(\n)/ },
+    { file: 'go/gin/go.mod', pattern: /(\tgithub\.com\/SmooAI\/observability\/go v)[^\n]+(\n)/ },
+    // The workspace replace is version-specific (Go rejects an all-versions
+    // replace of a workspace module), so it has to track the require lines.
+    { file: 'go/go.work', pattern: /(replace github\.com\/SmooAI\/observability\/go v)[^\s]+( => \.)/ },
 
     // ---- .NET ------------------------------------------------------------
     { file: 'dotnet/src/SmooAI.Observability/SmooAI.Observability.csproj', pattern: /(<Version>)[^<]+(<\/Version>)/ },
