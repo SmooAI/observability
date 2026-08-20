@@ -1,0 +1,172 @@
+{
+    "$schema": "./PII-README.md",
+    "version": 1,
+    "adr": "ADR-097",
+    "description": "Golden PII-token vectors every @smooai/observability SDK (TS, Rust, Python, Go, .NET) must reproduce. See parity/PII-README.md.",
+    "hash": {
+        "algorithm": "HMAC-SHA256",
+        "key": "test-hmac-key-not-a-real-secret",
+        "otherKey": "a-different-test-hmac-key",
+        "message": "utf8(orgId) || 0x00 || utf8(kind) || 0x00 || utf8(normalize(kind, raw))",
+        "output": "\"[\" + kind + \":\" + first 8 lowercase hex chars of the MAC + \"]\"",
+        "normalize": {
+            "email": "trim, then lowercase",
+            "phone": "keep ASCII digits only",
+            "address": "collapse runs of whitespace to one space, then lowercase"
+        },
+        "noKey": "with no key installed the token is \"[\" + kind + \":redacted]\" — fail safe, never a guessable hash"
+    },
+    "tokenWithKey": [
+        {
+            "kind": "email",
+            "raw": "a@b.com",
+            "orgId": "org-1",
+            "expected": "[email:02ea437f]",
+            "why": "the baseline vector"
+        },
+        {
+            "kind": "email",
+            "raw": "A@B.COM ",
+            "orgId": "org-1",
+            "expected": "[email:02ea437f]",
+            "why": "case-folded and trimmed — same hash as the baseline"
+        },
+        {
+            "kind": "email",
+            "raw": "  a@b.com  ",
+            "orgId": "org-1",
+            "expected": "[email:02ea437f]",
+            "why": "leading whitespace trims too, not just trailing"
+        },
+        {
+            "kind": "email",
+            "raw": "a@b.com",
+            "orgId": "org-2",
+            "expected": "[email:fd96f7dc]",
+            "why": "the org id is the salt — a different org hashes differently"
+        },
+        {
+            "kind": "email",
+            "raw": "a@b.com",
+            "orgId": "",
+            "expected": "[email:453b154f]",
+            "why": "empty org is a real salt value, not \"skip the salt\""
+        },
+        {
+            "kind": "email",
+            "raw": "a+tag@b.com",
+            "orgId": "org-1",
+            "expected": "[email:ac026c33]",
+            "why": "plus-addressing is NOT stripped — a+tag@ is a different person than a@"
+        },
+        {
+            "kind": "email",
+            "raw": "Ünïcode@exämple.com",
+            "orgId": "org-1",
+            "expected": "[email:552cd1a6]",
+            "why": "lowercasing is Unicode-aware and the message is UTF-8"
+        },
+        {
+            "kind": "phone",
+            "raw": "(415) 555-0142",
+            "orgId": "org-1",
+            "expected": "[phone:415a9aea]",
+            "why": "parens and spaces are formatting"
+        },
+        {
+            "kind": "phone",
+            "raw": "415-555-0142",
+            "orgId": "org-1",
+            "expected": "[phone:415a9aea]",
+            "why": "so are dashes — same hash"
+        },
+        {
+            "kind": "phone",
+            "raw": "415.555.0142",
+            "orgId": "org-1",
+            "expected": "[phone:415a9aea]",
+            "why": "and dots — same hash"
+        },
+        {
+            "kind": "phone",
+            "raw": "+1 415-555-0142",
+            "orgId": "org-1",
+            "expected": "[phone:9d8c54be]",
+            "why": "a country code is DIGITS, so it does change the hash"
+        },
+        {
+            "kind": "address",
+            "raw": "1600  Pennsylvania   Ave",
+            "orgId": "org-1",
+            "expected": "[address:c5351f4a]",
+            "why": "runs of spaces collapse to one"
+        },
+        {
+            "kind": "address",
+            "raw": "1600 PENNSYLVANIA AVE",
+            "orgId": "org-1",
+            "expected": "[address:c5351f4a]",
+            "why": "case-folded — same hash"
+        },
+        {
+            "kind": "address",
+            "raw": "1600\tPennsylvania\nAve",
+            "orgId": "org-1",
+            "expected": "[address:c5351f4a]",
+            "why": "tabs and newlines are whitespace too, not just spaces"
+        },
+        {
+            "kind": "address",
+            "raw": "1600 Pennsylvania Ave",
+            "orgId": "org-2",
+            "expected": "[address:fa4f476d]",
+            "why": "salted by org like every other kind"
+        }
+    ],
+    "tokenWithOtherKey": [
+        {
+            "kind": "email",
+            "raw": "a@b.com",
+            "orgId": "org-1",
+            "expected": "[email:65943a3a]"
+        },
+        {
+            "kind": "email",
+            "raw": "A@B.COM ",
+            "orgId": "org-1",
+            "expected": "[email:65943a3a]"
+        },
+        {
+            "kind": "email",
+            "raw": "  a@b.com  ",
+            "orgId": "org-1",
+            "expected": "[email:65943a3a]"
+        },
+        {
+            "kind": "email",
+            "raw": "a@b.com",
+            "orgId": "org-2",
+            "expected": "[email:f4e44322]"
+        }
+    ],
+    "tokenWithoutKey": [
+        {
+            "kind": "email",
+            "raw": "a@b.com",
+            "orgId": "org-1",
+            "expected": "[email:redacted]"
+        },
+        {
+            "kind": "phone",
+            "raw": "415-555-0142",
+            "orgId": "org-1",
+            "expected": "[phone:redacted]"
+        },
+        {
+            "kind": "address",
+            "raw": "1600 Pennsylvania Ave",
+            "orgId": "org-1",
+            "expected": "[address:redacted]"
+        }
+    ]
+}

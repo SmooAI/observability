@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { _resetPiiHashKeyForTests, _scrubWithKey, _tokenWithKey, piiToken, scrubHeaders, scrubHeadersForOrg, scrubString, setPiiHashKey } from '../pii';
 
@@ -136,22 +139,53 @@ describe('piiToken', () => {
     });
 });
 
-// ---- cross-SDK byte parity -----------------------------------------------
+// ---- shared PII corpus (ADR-097 §4) --------------------------------------
 
-describe('cross-SDK parity vectors', () => {
-    // Computed independently (python `hmac.new(key, org\0kind\0normalized,
-    // "sha256")`) and asserted verbatim in all five SDKs. If any SDK's message
-    // framing, normalization or truncation drifts, exactly one of these breaks.
-    it.each([
-        ['email', 'a@b.com', 'org-1', '[email:02ea437f]'],
-        ['email', 'A@B.COM ', 'org-1', '[email:02ea437f]'],
-        ['email', 'a@b.com', 'org-2', '[email:fd96f7dc]'],
-        ['email', 'a@b.com', '', '[email:453b154f]'],
-        ['phone', '(415) 555-0142', 'org-1', '[phone:415a9aea]'],
-        ['phone', '415-555-0142', 'org-1', '[phone:415a9aea]'],
-        ['address', '1600  Pennsylvania   Ave', 'org-1', '[address:c5351f4a]'],
-    ] as const)('%s %s in %s', (kind, raw, org, expected) => {
-        expect(_tokenWithKey(kind, raw, org, KEY)).toBe(expected);
+/**
+ * The vectors used to be seven tuples typed out in five languages. Nothing
+ * detected a divergence in the *set* — only in values someone remembered to
+ * copy. They now live in `parity/pii-corpus.json`, which all five SDKs load.
+ */
+interface PiiVector {
+    kind: 'email' | 'phone' | 'address';
+    raw: string;
+    orgId: string;
+    expected: string;
+}
+
+interface PiiCorpus {
+    version: number;
+    hash: { key: string; otherKey: string };
+    tokenWithKey: PiiVector[];
+    tokenWithOtherKey: PiiVector[];
+    tokenWithoutKey: PiiVector[];
+}
+
+const PII_CORPUS_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../../../parity/pii-corpus.json');
+const piiCorpus: PiiCorpus = JSON.parse(readFileSync(PII_CORPUS_PATH, 'utf8'));
+
+describe('shared PII corpus', () => {
+    it('is the expected version and uses the keys these tests install', () => {
+        // If the corpus rotates a key, every expected token changes — asserting
+        // the local constants match makes that read as "wrong key" rather than
+        // "the hash broke".
+        expect(piiCorpus.version).toBe(1);
+        expect(piiCorpus.hash.key).toBe('test-hmac-key-not-a-real-secret');
+        expect(piiCorpus.hash.otherKey).toBe('a-different-test-hmac-key');
+        expect(piiCorpus.tokenWithKey.length).toBeGreaterThan(0);
+    });
+
+    it.each(piiCorpus.tokenWithKey)('tokenWithKey $kind $raw in $orgId', (v) => {
+        expect(_tokenWithKey(v.kind, v.raw, v.orgId, KEY)).toBe(v.expected);
+    });
+
+    it.each(piiCorpus.tokenWithOtherKey)('tokenWithOtherKey $kind $raw in $orgId', (v) => {
+        expect(_tokenWithKey(v.kind, v.raw, v.orgId, OTHER_KEY)).toBe(v.expected);
+    });
+
+    // No key installed → redaction, never a hash under a guessable key.
+    it.each(piiCorpus.tokenWithoutKey)('tokenWithoutKey $kind $raw in $orgId', (v) => {
+        expect(_tokenWithKey(v.kind, v.raw, v.orgId, null)).toBe(v.expected);
     });
 });
 

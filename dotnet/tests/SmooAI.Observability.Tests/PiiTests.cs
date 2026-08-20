@@ -1,3 +1,5 @@
+using System.Text;
+using System.Text.Json;
 using SmooAI.Observability;
 
 namespace SmooAI.Observability.Tests;
@@ -255,25 +257,109 @@ public class PiiHashingTests
 }
 
 /// <summary>
-/// Pins the exact bytes every SDK must produce. Computed independently
-/// (python <c>hmac.new(key, org\0kind\0normalized, "sha256")</c>) and asserted
-/// verbatim in all five SDKs. If any SDK's message framing, normalization or
-/// truncation drifts, exactly one of these breaks.
+/// The .NET lane of the shared PII corpus (ADR-097 §4).
 /// </summary>
-public class PiiCrossSdkParityTests
+/// <remarks>
+/// The vectors used to be seven tuples typed out in five languages. Nothing
+/// detected a divergence in the <em>set</em> — only in values someone remembered
+/// to copy. They now live in <c>parity/pii-corpus.json</c>, which all five SDKs
+/// load.
+/// </remarks>
+public class PiiCorpusTests
 {
-    private static readonly byte[] Key = "test-hmac-key-not-a-real-secret"u8.ToArray();
+    private static readonly string CorpusJson = File.ReadAllText(FindCorpus());
+
+    private static string FindCorpus()
+    {
+        // Walk up from the test binary to the repo root — the corpus is shared
+        // with four other languages and lives at the top level.
+        var dir = new DirectoryInfo(AppContext.BaseDirectory);
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "parity", "pii-corpus.json");
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            dir = dir.Parent;
+        }
+
+        throw new FileNotFoundException($"parity/pii-corpus.json not found above {AppContext.BaseDirectory}");
+    }
+
+    private static byte[] Key => Encoding.UTF8.GetBytes(Root.GetProperty("hash").GetProperty("key").GetString()!);
+
+    private static byte[] OtherKey => Encoding.UTF8.GetBytes(Root.GetProperty("hash").GetProperty("otherKey").GetString()!);
+
+    private static JsonElement Root => JsonDocument.Parse(CorpusJson).RootElement.Clone();
+
+    private static IEnumerable<object[]> Section(string name)
+    {
+        using var doc = JsonDocument.Parse(CorpusJson);
+        if (!doc.RootElement.TryGetProperty(name, out var section) || section.ValueKind != JsonValueKind.Array)
+        {
+            throw new InvalidOperationException($"corpus section `{name}` missing or not an array");
+        }
+
+        foreach (var vector in section.EnumerateArray())
+        {
+            yield return new object[] { vector.GetRawText() };
+        }
+    }
+
+    public static IEnumerable<object[]> TokenWithKeyVectors() => Section("tokenWithKey");
+
+    public static IEnumerable<object[]> TokenWithOtherKeyVectors() => Section("tokenWithOtherKey");
+
+    public static IEnumerable<object[]> TokenWithoutKeyVectors() => Section("tokenWithoutKey");
+
+    private static PiiKind KindFromLabel(string label) => label switch
+    {
+        "email" => PiiKind.Email,
+        "phone" => PiiKind.Phone,
+        "address" => PiiKind.Address,
+        _ => throw new InvalidOperationException($"corpus names an unknown PII kind: {label}"),
+    };
+
+    [Fact]
+    public void CorpusIsTheExpectedVersionAndIsNotEmpty()
+    {
+        Assert.Equal(1, Root.GetProperty("version").GetInt32());
+        Assert.NotEmpty(TokenWithKeyVectors());
+    }
 
     [Theory]
-    [InlineData(PiiKind.Email, "a@b.com", "org-1", "[email:02ea437f]")]
-    [InlineData(PiiKind.Email, "A@B.COM ", "org-1", "[email:02ea437f]")]
-    [InlineData(PiiKind.Email, "a@b.com", "org-2", "[email:fd96f7dc]")]
-    [InlineData(PiiKind.Email, "a@b.com", "", "[email:453b154f]")]
-    [InlineData(PiiKind.Phone, "(415) 555-0142", "org-1", "[phone:415a9aea]")]
-    [InlineData(PiiKind.Phone, "415-555-0142", "org-1", "[phone:415a9aea]")]
-    [InlineData(PiiKind.Address, "1600  Pennsylvania   Ave", "org-1", "[address:c5351f4a]")]
-    public void MatchesTheSharedVectors(PiiKind kind, string raw, string orgId, string expected)
+    [MemberData(nameof(TokenWithKeyVectors))]
+    public void TokenWithKey(string vectorJson)
     {
-        Assert.Equal(expected, Pii.TokenWithKey(kind, raw, orgId, Key));
+        var v = JsonDocument.Parse(vectorJson).RootElement;
+        var got = Pii.TokenWithKey(KindFromLabel(v.GetProperty("kind").GetString()!), v.GetProperty("raw").GetString()!, v.GetProperty("orgId").GetString()!, Key);
+        Assert.Equal(v.GetProperty("expected").GetString(), got);
+    }
+
+    [Theory]
+    [MemberData(nameof(TokenWithOtherKeyVectors))]
+    public void TokenWithOtherKey(string vectorJson)
+    {
+        var v = JsonDocument.Parse(vectorJson).RootElement;
+        var got = Pii.TokenWithKey(
+            KindFromLabel(v.GetProperty("kind").GetString()!),
+            v.GetProperty("raw").GetString()!,
+            v.GetProperty("orgId").GetString()!,
+            OtherKey);
+        Assert.Equal(v.GetProperty("expected").GetString(), got);
+    }
+
+    /// <summary>
+    /// No key installed → redaction, never a hash under a guessable key.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(TokenWithoutKeyVectors))]
+    public void TokenWithoutKey(string vectorJson)
+    {
+        var v = JsonDocument.Parse(vectorJson).RootElement;
+        var got = Pii.TokenWithKey(KindFromLabel(v.GetProperty("kind").GetString()!), v.GetProperty("raw").GetString()!, v.GetProperty("orgId").GetString()!, null);
+        Assert.Equal(v.GetProperty("expected").GetString(), got);
     }
 }
