@@ -71,7 +71,11 @@ pub fn MetricsView(org_id: Uuid) -> Element {
         let api_state = api_for_list.clone();
         async move {
             let api = make_client(&api_state)?;
-            match api.org(org_id).list_metrics(&MetricListParams::default()).await {
+            match api
+                .org(org_id)
+                .list_metrics(&MetricListParams::default())
+                .await
+            {
                 Ok(MetricDescriptorList { metrics }) => Some(Ok::<_, String>(metrics)),
                 Err(e) => Some(Err(format!("{e}"))),
             }
@@ -278,10 +282,18 @@ fn render_pane(
 // ---------- chart renderers -------------------------------------------------
 
 fn render_mean(points: &[MetricTimeSeriesPoint]) -> Element {
-    let series = group_by_key(points, |p| p.group_key.clone(), |p| {
-        let v = if p.count == 0 { p.value } else { p.value / p.count as f64 };
-        (p.bucket_ms, v)
-    });
+    let series = group_by_key(
+        points,
+        |p| p.group_key.clone(),
+        |p| {
+            let v = if p.count == 0 {
+                p.value
+            } else {
+                p.value / p.count as f64
+            };
+            (p.bucket_ms, v)
+        },
+    );
     rsx! {
         {render_line_chart(&series, &["mean"])}
     }
@@ -485,10 +497,7 @@ fn render_heatmap(points: &[MetricHeatmapPoint]) -> Element {
         .max(1);
 
     let grid_style = format!(
-        "grid-template-columns: repeat({cols}, 1fr); grid-template-rows: repeat({rows}, 1fr); aspect-ratio: {ratio};",
-        cols = cols,
-        rows = rows,
-        ratio = format!("{cols} / {rows}"),
+        "grid-template-columns: repeat({cols}, 1fr); grid-template-rows: repeat({rows}, 1fr); aspect-ratio: {cols} / {rows};"
     );
 
     let xa = format_ms(points.first().unwrap().bucket_ms);
@@ -561,10 +570,18 @@ fn bounds(series: &[(String, Vec<(i64, f64)>)]) -> (i64, i64, f64, f64) {
     let mut max_y = f64::NEG_INFINITY;
     for (_, pts) in series {
         for (x, y) in pts {
-            if *x < min_x { min_x = *x; }
-            if *x > max_x { max_x = *x; }
-            if *y < min_y { min_y = *y; }
-            if *y > max_y { max_y = *y; }
+            if *x < min_x {
+                min_x = *x;
+            }
+            if *x > max_x {
+                max_x = *x;
+            }
+            if *y < min_y {
+                min_y = *y;
+            }
+            if *y > max_y {
+                max_y = *y;
+            }
         }
     }
     if min_x == i64::MAX {
@@ -637,9 +654,24 @@ mod tests {
     #[test]
     fn group_by_key_sorts_within_group() {
         let pts = vec![
-            MetricTimeSeriesPoint { bucket_ms: 200, group_key: "a".into(), value: 4.0, count: 2 },
-            MetricTimeSeriesPoint { bucket_ms: 100, group_key: "a".into(), value: 2.0, count: 1 },
-            MetricTimeSeriesPoint { bucket_ms: 100, group_key: "b".into(), value: 7.0, count: 1 },
+            MetricTimeSeriesPoint {
+                bucket_ms: 200,
+                group_key: "a".into(),
+                value: 4.0,
+                count: 2,
+            },
+            MetricTimeSeriesPoint {
+                bucket_ms: 100,
+                group_key: "a".into(),
+                value: 2.0,
+                count: 1,
+            },
+            MetricTimeSeriesPoint {
+                bucket_ms: 100,
+                group_key: "b".into(),
+                value: 7.0,
+                count: 1,
+            },
         ];
         let series = group_by_key(&pts, |p| p.group_key.clone(), |p| (p.bucket_ms, p.value));
         assert_eq!(series.len(), 2);

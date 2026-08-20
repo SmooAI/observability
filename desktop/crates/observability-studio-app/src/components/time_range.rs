@@ -5,9 +5,10 @@
 use chrono::{DateTime, Duration, Utc};
 use dioxus::prelude::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, Default)]
 pub enum TimePreset {
     Last15m,
+    #[default]
     Last1h,
     Last6h,
     Last24h,
@@ -46,12 +47,6 @@ impl TimePreset {
     pub fn resolve_now(self) -> (DateTime<Utc>, DateTime<Utc>) {
         let now = Utc::now();
         (now - self.duration(), now)
-    }
-}
-
-impl Default for TimePreset {
-    fn default() -> Self {
-        Self::Last1h
     }
 }
 

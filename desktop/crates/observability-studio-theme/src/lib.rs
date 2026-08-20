@@ -26,4 +26,3 @@ pub const MONOGRAM_SVG: &str = smooai_ui::MONOGRAM_SVG;
 /// Re-export brand token constants for code paths that need a color outside
 /// of CSS (custom-painted widgets, native menu chrome, chart libraries).
 pub use smooai_ui::tokens;
-

@@ -252,8 +252,16 @@ fn render_kpis(state: &Option<Option<LogStats>>) -> Element {
             let errors = s.errors_total();
             let rate = s.error_rate_pct();
             let p95 = s.duration_percentiles.p95;
-            let error_tone = if errors > 0 { KpiTone::Destructive } else { KpiTone::Default };
-            let rate_tone = if rate > 1.0 { KpiTone::Warning } else { KpiTone::Default };
+            let error_tone = if errors > 0 {
+                KpiTone::Destructive
+            } else {
+                KpiTone::Default
+            };
+            let rate_tone = if rate > 1.0 {
+                KpiTone::Warning
+            } else {
+                KpiTone::Default
+            };
             (total, errors, rate, p95, error_tone, rate_tone)
         }
         None => (0, 0, 0.0, 0.0, KpiTone::Default, KpiTone::Default),
@@ -262,22 +270,38 @@ fn render_kpis(state: &Option<Option<LogStats>>) -> Element {
     let tiles = vec![
         KpiTile {
             label: "Total logs".into(),
-            value: if stats.is_some() { thousands(total) } else { "—".into() },
+            value: if stats.is_some() {
+                thousands(total)
+            } else {
+                "—".into()
+            },
             tone: KpiTone::Default,
         },
         KpiTile {
             label: "Errors".into(),
-            value: if stats.is_some() { thousands(errors) } else { "—".into() },
+            value: if stats.is_some() {
+                thousands(errors)
+            } else {
+                "—".into()
+            },
             tone: error_tone,
         },
         KpiTile {
             label: "Error rate".into(),
-            value: if stats.is_some() { format!("{rate:.2}%") } else { "—".into() },
+            value: if stats.is_some() {
+                format!("{rate:.2}%")
+            } else {
+                "—".into()
+            },
             tone: rate_tone,
         },
         KpiTile {
             label: "P95 duration".into(),
-            value: if stats.is_some() { format!("{p95:.0} ms") } else { "—".into() },
+            value: if stats.is_some() {
+                format!("{p95:.0} ms")
+            } else {
+                "—".into()
+            },
             tone: KpiTone::Default,
         },
     ];
@@ -364,7 +388,9 @@ fn render_level(level: Option<&str>) -> Element {
 }
 
 fn render_status(status: Option<i64>) -> Element {
-    let Some(code) = status else { return rsx! { span {} } };
+    let Some(code) = status else {
+        return rsx! { span {} };
+    };
     let bucket = match code {
         100..=199 => "1xx",
         200..=299 => "2xx",
@@ -385,7 +411,10 @@ fn render_detail(entry: &LogEntry) -> Element {
         ("trace_id", entry.trace_id.clone().unwrap_or_default()),
         (
             "duration_ms",
-            entry.duration_ms.map(|d| format!("{d:.1}")).unwrap_or_default(),
+            entry
+                .duration_ms
+                .map(|d| format!("{d:.1}"))
+                .unwrap_or_default(),
         ),
         (
             "http",
@@ -403,11 +432,15 @@ fn render_detail(entry: &LogEntry) -> Element {
     .map(|(k, v)| (k.to_string(), v))
     .collect();
 
-    let parsed: Option<Vec<(String, String)>> = entry.parsed_fields.as_ref().filter(|m| !m.is_empty()).map(|m| {
-        let mut v: Vec<_> = m.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        v.sort_by(|a, b| a.0.cmp(&b.0));
-        v
-    });
+    let parsed: Option<Vec<(String, String)>> = entry
+        .parsed_fields
+        .as_ref()
+        .filter(|m| !m.is_empty())
+        .map(|m| {
+            let mut v: Vec<_> = m.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            v.sort_by(|a, b| a.0.cmp(&b.0));
+            v
+        });
 
     rsx! {
         div { class: "logs__detail-grid",
@@ -449,7 +482,10 @@ fn row_key(entry: &LogEntry) -> String {
 fn format_ts(iso: &str) -> String {
     let no_t = iso.replacen('T', " ", 1);
     // Drop fractional seconds + the trailing `Z`.
-    let no_frac = no_t.split_once('.').map(|(a, _)| a.to_string()).unwrap_or(no_t);
+    let no_frac = no_t
+        .split_once('.')
+        .map(|(a, _)| a.to_string())
+        .unwrap_or(no_t);
     no_frac.trim_end_matches('Z').to_string()
 }
 

@@ -11,19 +11,14 @@ use super::{ApiError, OrgClient};
 
 impl<'a> OrgClient<'a> {
     /// `GET /errors` — first page of error groups filtered by status + env.
-    pub async fn list_error_groups(
-        &self,
-        params: &ErrorListParams,
-    ) -> Result<ErrorPage, ApiError> {
+    pub async fn list_error_groups(&self, params: &ErrorListParams) -> Result<ErrorPage, ApiError> {
         self.get("errors", Some(params)).await
     }
 
     /// `GET /errors/{group_id}` — group metadata + most recent events.
-    pub async fn get_error_group(
-        &self,
-        group_id: Uuid,
-    ) -> Result<ErrorDetail, ApiError> {
-        self.get::<ErrorDetail, ()>(&format!("errors/{group_id}"), None).await
+    pub async fn get_error_group(&self, group_id: Uuid) -> Result<ErrorDetail, ApiError> {
+        self.get::<ErrorDetail, ()>(&format!("errors/{group_id}"), None)
+            .await
     }
 
     /// `GET /errors/{group_id}/events?cursor=…&limit=…` — paginate events.
@@ -32,7 +27,8 @@ impl<'a> OrgClient<'a> {
         group_id: Uuid,
         params: &PageParams,
     ) -> Result<ErrorEventPage, ApiError> {
-        self.get(&format!("errors/{group_id}/events"), Some(params)).await
+        self.get(&format!("errors/{group_id}/events"), Some(params))
+            .await
     }
 
     /// `PATCH /errors/{group_id}` — mark resolved / muted, reassign.
@@ -193,9 +189,7 @@ pub struct StackFrame {
 /// Pulls frames out of the first entry of an SDK `exception` array. Returns
 /// `None` when the shape doesn't match — callers render nothing rather than
 /// erroring.
-pub fn extract_first_stacktrace(
-    exception: &Option<serde_json::Value>,
-) -> Option<Vec<StackFrame>> {
+pub fn extract_first_stacktrace(exception: &Option<serde_json::Value>) -> Option<Vec<StackFrame>> {
     let exc = exception.as_ref()?;
     let arr = exc.as_array()?;
     let first = arr.first()?;

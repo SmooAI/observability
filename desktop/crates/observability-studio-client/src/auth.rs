@@ -170,13 +170,8 @@ impl AuthManager {
     }
 }
 
-pub fn store_credentials(
-    org: Uuid,
-    client_id: &str,
-    client_secret: &str,
-) -> Result<(), AuthError> {
-    keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_id"))?
-        .set_password(client_id)?;
+pub fn store_credentials(org: Uuid, client_id: &str, client_secret: &str) -> Result<(), AuthError> {
+    keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_id"))?.set_password(client_id)?;
     keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_secret"))?
         .set_password(client_secret)?;
     Ok(())
@@ -199,10 +194,9 @@ pub fn read_credentials(org: Uuid) -> Result<(String, String), AuthError> {
 }
 
 pub fn remove_credentials(org: Uuid) -> Result<(), AuthError> {
-    let _ = keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_id"))?
-        .delete_credential();
-    let _ = keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_secret"))?
-        .delete_credential();
+    let _ = keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_id"))?.delete_credential();
+    let _ =
+        keyring::Entry::new(KEYCHAIN_SERVICE, &account(org, "client_secret"))?.delete_credential();
     Ok(())
 }
 

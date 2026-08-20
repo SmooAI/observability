@@ -266,15 +266,15 @@ Full backend architecture: [SmooAI/smooai → docs/Architecture/Observability-Ar
 
 ## 🗂️ Five SDKs, one contract
 
-| Path                             | What it is                                                                                                               | Tests / CI                                                                |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------- |
-| [`packages/core`](packages/core) | **TypeScript** reference SDK — browser + Node entries, `/react` · `/next` · `/otel` · `/metrics` · `/bootstrap` subpaths | vitest, published via changesets                                          |
-| [`python/`](python)              | **Python** SDK — capture, crash hooks, OTel, GenAI, FastAPI + LangChain integrations                                     | pytest lane in [`pr-checks.yml`](.github/workflows/pr-checks.yml)         |
-| [`rust/`](rust)                  | **Rust** SDK (`smooai-observability`) — capture, OTel, GenAI, tower + reqwest middleware                                 | cargo test + clippy lane                                                  |
-| [`go/`](go)                      | **Go** SDK — capture, OTel, GenAI, net/http + [Fiber](go/fiber) + [Gin](go/gin) middleware                               | go test lane                                                              |
-| [`dotnet/`](dotnet)              | **.NET** SDK (`SmooAI.Observability`) — capture, OTel, GenAI, ASP.NET Core middleware                                    | dotnet test lane                                                          |
-| [`desktop/`](desktop)            | **Observability Studio** — Dioxus desktop client                                                                         | [`build-desktop.yml`](.github/workflows/build-desktop.yml) (3-OS bundles) |
-| [`parity/`](parity)              | Shared sampling/traceparent/settings corpus (see [above](#-cross-language-parity-honestly))                              | loaded by all five language lanes                                         |
+| Path                             | What it is                                                                                                               | Tests / CI                                                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| [`packages/core`](packages/core) | **TypeScript** reference SDK — browser + Node entries, `/react` · `/next` · `/otel` · `/metrics` · `/bootstrap` subpaths | vitest, published via changesets                                                                                         |
+| [`python/`](python)              | **Python** SDK — capture, crash hooks, OTel, GenAI, FastAPI + LangChain integrations                                     | pytest lane in [`pr-checks.yml`](.github/workflows/pr-checks.yml)                                                        |
+| [`rust/`](rust)                  | **Rust** SDK (`smooai-observability`) — capture, OTel, GenAI, tower + reqwest middleware                                 | cargo test + clippy lane                                                                                                 |
+| [`go/`](go)                      | **Go** SDK — capture, OTel, GenAI, net/http + [Fiber](go/fiber) + [Gin](go/gin) middleware                               | go test lane                                                                                                             |
+| [`dotnet/`](dotnet)              | **.NET** SDK (`SmooAI.Observability`) — capture, OTel, GenAI, ASP.NET Core middleware                                    | dotnet test lane                                                                                                         |
+| [`desktop/`](desktop)            | **Observability Studio** — Dioxus desktop client                                                                         | fmt + clippy + test lane; [`build-desktop.yml`](.github/workflows/build-desktop.yml) bundles 3 OSes on a `studio-v*` tag |
+| [`parity/`](parity)              | Shared sampling/traceparent/settings corpus (see [above](#-cross-language-parity-honestly))                              | loaded by all five language lanes                                                                                        |
 
 Every language runs typecheck/lint/format/test in its own [`pr-checks.yml`](.github/workflows/pr-checks.yml) lane on every PR that touches it.
 

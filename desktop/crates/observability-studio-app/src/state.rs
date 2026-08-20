@@ -13,16 +13,11 @@ use uuid::Uuid;
 use crate::persistence::{self, OrgEntry, OrgRegistry, PersistedSource, PersistedView, UiState};
 
 /// Which data source the user is currently viewing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum ActiveSource {
+    #[default]
     Local,
     Remote(Uuid),
-}
-
-impl Default for ActiveSource {
-    fn default() -> Self {
-        Self::Local
-    }
 }
 
 /// Which dashboard view is showing inside a remote source.
@@ -39,6 +34,12 @@ pub enum RemoteView {
 pub struct ApiState {
     pub http: reqwest::Client,
     pub auth: AuthManager,
+}
+
+impl Default for ApiState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ApiState {
@@ -116,10 +117,7 @@ pub fn persist_ui_state(source: ActiveSource, view: RemoteView) {
 
 /// Convenience accessor used across views to find the entry for the current
 /// remote source (if any).
-pub fn current_remote_org(
-    source: ActiveSource,
-    registry: &OrgRegistry,
-) -> Option<OrgEntry> {
+pub fn current_remote_org(source: ActiveSource, registry: &OrgRegistry) -> Option<OrgEntry> {
     if let ActiveSource::Remote(id) = source {
         registry.entries.iter().find(|e| e.org_id == id).cloned()
     } else {
