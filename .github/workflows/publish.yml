@@ -108,9 +108,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - uses: actions/setup-node@v4
-              with:
-                  node-version: 22
+            # Toolchains come from mise.toml, read here by mise-action so the runner
+            # and a developer's shell resolve identical versions.
+            - name: Setup toolchains (mise)
+              uses: jdx/mise-action@v4
 
             - name: Check version sync across all five SDKs
               run: node scripts/sync-versions.mjs --check
@@ -224,10 +225,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Install uv
-              uses: astral-sh/setup-uv@v5
-              with:
-                  enable-cache: true
+            # Toolchains come from mise.toml, read here by mise-action so the runner
+            # and a developer's shell resolve identical versions.
+            - name: Setup toolchains (mise)
+              uses: jdx/mise-action@v4
 
             # Fail on a missing credential BEFORE the suite runs, not after a
             # clean package at the upload step. A missing secret is the empty
@@ -355,11 +356,10 @@ jobs:
         steps:
             - uses: actions/checkout@v4
 
-            - name: Setup Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: '1.25'
-                  cache-dependency-path: go/go.mod
+            # Toolchains come from mise.toml, read here by mise-action so the runner
+            # and a developer's shell resolve identical versions.
+            - name: Setup toolchains (mise)
+              uses: jdx/mise-action@v4
 
             # Gate on the PR-lane checks before warming the proxy. gofmt is
             # recursive, so one run covers all three modules; vet and test are
