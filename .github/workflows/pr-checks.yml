@@ -28,6 +28,11 @@ jobs:
 
             - uses: dorny/paths-filter@v3
               id: filter
+              # Every filter includes `mise.toml`: it pins the toolchain each
+              # lane builds with, so a version bump there changes the build for
+              # all of them. Without it a toolchain PR touches no language dir,
+              # every lane skips, and the run reports success having compiled
+              # nothing on the new version — a green that means the opposite.
               with:
                   filters: |
                       ts:
@@ -40,22 +45,27 @@ jobs:
                           - 'tsconfig.base.json'
                           - '.changeset/**'
                           - '.github/workflows/pr-checks.yml'
+                          - 'mise.toml'
                       rust:
                           - 'parity/**'
                           - 'rust/**'
                           - '.github/workflows/pr-checks.yml'
+                          - 'mise.toml'
                       go:
                           - 'parity/**'
                           - 'go/**'
                           - '.github/workflows/pr-checks.yml'
+                          - 'mise.toml'
                       python:
                           - 'parity/**'
                           - 'python/**'
                           - '.github/workflows/pr-checks.yml'
+                          - 'mise.toml'
                       dotnet:
                           - 'parity/**'
                           - 'dotnet/**'
                           - '.github/workflows/pr-checks.yml'
+                          - 'mise.toml'
                       # `desktop/` is its own cargo workspace, NOT a member of
                       # `rust/`, so the rust lane never compiled it. It has no
                       # `parity/**` trigger because the studio is a client of
@@ -63,6 +73,7 @@ jobs:
                       desktop:
                           - 'desktop/**'
                           - '.github/workflows/pr-checks.yml'
+                          - 'mise.toml'
 
     # Version-drift gate — deliberately NOT gated on `changes`.
     #

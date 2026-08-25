@@ -9,5 +9,5 @@
 #            and mise defers to it anyway.
 [tools]
 node = "24.14.0" # ships npm 11.9.0 — required (>=11.5.1) for npm OIDC trusted publishing
-go = "1.25"
+go = "1.26"
 uv = "latest"
